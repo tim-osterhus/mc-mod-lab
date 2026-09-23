@@ -1,6 +1,6 @@
 # Minecraft Mod Lab
 
-Minecraft Mod Lab is a thin, local verification toolkit for evidence-backed Minecraft mod development. This initial checkpoint supports a disposable save copy, environment doctor, and one before/click-or-key/after capture workflow. It does not launch Minecraft, install mods, edit a target mod, or decide visual parity.
+Minecraft Mod Lab is a thin, local verification toolkit for evidence-backed Minecraft mod development. This alpha supports a disposable save copy, environment doctor, and one bounded before/action/after capture workflow. It does not launch Minecraft, install mods, edit a target mod, or decide visual parity.
 
 ## Pinned bridge candidate and safety
 

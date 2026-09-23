@@ -4,3 +4,13 @@ __pycache__/
 reports/
 identity.json
 *.jar
+.env
+.env.*
+!.env.example
+!.env.*.example
+session-token.txt
+*.pem
+*.key
+*.privatekey
+*.p12
+*.pfx
