@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
 from unittest.mock import patch
 
@@ -67,6 +68,8 @@ class LabTests(unittest.TestCase):
             return {"screen": "GuideScreen", "buttons": [{"label": ""}, {"label": ""}]}
         if command == "click":
             return {"clicked": True, "method": "screen-event"}
+        if command == "use_item":
+            return {"result": "used"}
         if command == "enter_control_mode":
             return {"control_mode": True}
         if command == "exit_control_mode":
@@ -117,9 +120,13 @@ class LabTests(unittest.TestCase):
         self.assertEqual(self.run_capture()["status"], "unsupported")
 
     def test_launch_check_requires_matching_game_dir(self):
+        wrong = self.root / "wrong"
+        wrong.mkdir()
         class Result:
             returncode = 0
-            stdout = json.dumps({"CommandLine": "java --gameDir C:\\wrong", "Created": lab.now()})
+            stdout = json.dumps({"ProcessId": 123,
+                                 "CommandLine": "java --gameDir " + str(wrong) + " --note " + str(self.game_dir),
+                                 "Created": lab.now()})
         with patch.object(lab.platform, "system", return_value="Windows"), \
              patch.object(lab.shutil, "which", return_value="powershell"), \
              patch.object(lab.subprocess, "run", return_value=Result()):
@@ -129,12 +136,69 @@ class LabTests(unittest.TestCase):
     def test_launch_check_accepts_fresh_matching_process_and_log(self):
         class Result:
             returncode = 0
-            stdout = json.dumps({"CommandLine": "java --gameDir " + str(self.game_dir),
+            stdout = json.dumps({"ProcessId": 123,
+                                 "CommandLine": "java --gameDir " + str(self.game_dir),
                                  "Created": lab.now()})
         with patch.object(lab.platform, "system", return_value="Windows"), \
              patch.object(lab.shutil, "which", return_value="powershell"), \
              patch.object(lab.subprocess, "run", return_value=Result()):
             self.assertTrue(lab.launch_check(self.identity))
+
+    def launch_with_argfile(self, content, *, created=None, process_id=123):
+        folder = self.root / "Java Args"
+        folder.mkdir(exist_ok=True)
+        argfile = folder / "java.args"
+        argfile.write_text(content, encoding="utf-8")
+        command_line = '"C:\\Program Files\\Java\\bin\\java.exe" @"' + str(argfile) + '"'
+        class Result:
+            returncode = 0
+            stdout = json.dumps({"ProcessId": process_id, "CommandLine": command_line,
+                                 "Created": created or (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()})
+        with patch.object(lab.platform, "system", return_value="Windows"), \
+             patch.object(lab.shutil, "which", return_value="powershell"), \
+             patch.object(lab.subprocess, "run", return_value=Result()):
+            return lab.launch_check(self.identity)
+
+    def test_quoted_java_argfile_accepts_exact_game_dir(self):
+        game_dir = str(self.game_dir).replace("\\", "\\\\")
+        self.assertTrue(self.launch_with_argfile('"--gameDir"\n"' + game_dir + '"\n'))
+
+    def test_java_argfile_wrong_world_not_hidden_by_other_path(self):
+        wrong = self.root / "wrong"
+        wrong.mkdir()
+        content = ('--note "' + str(self.game_dir).replace("\\", "\\\\") + '"\n'
+                   '--gameDir "' + str(wrong).replace("\\", "\\\\") + '"\n')
+        with self.assertRaisesRegex(lab.LabError, "game_dir"):
+            self.launch_with_argfile(content)
+
+    def test_java_argfile_modified_after_launch_rejected(self):
+        created = datetime.now(timezone.utc) - timedelta(minutes=1)
+        with self.assertRaisesRegex(lab.LabError, "unreadable or untrusted"):
+            self.launch_with_argfile('--gameDir "' + str(self.game_dir).replace("\\", "\\\\") + '"',
+                                     created=created.isoformat())
+
+    def test_java_argfile_unreadable_rejected(self):
+        with patch.object(Path, "read_text", side_effect=PermissionError("denied")):
+            with self.assertRaisesRegex(lab.LabError, "unreadable or untrusted"):
+                self.launch_with_argfile('--gameDir "' + str(self.game_dir) + '"')
+
+    def test_java_argfile_repeated_game_dir_rejected(self):
+        value = str(self.game_dir).replace("\\", "\\\\")
+        with self.assertRaisesRegex(lab.LabError, "exactly one --gameDir"):
+            self.launch_with_argfile('--gameDir "' + value + '" --gameDir "' + value + '"')
+
+    def test_java_argfile_rejects_wrong_pid_metadata(self):
+        with self.assertRaisesRegex(lab.LabError, "process metadata"):
+            self.launch_with_argfile('--gameDir "' + str(self.game_dir) + '"', process_id=456)
+
+    def test_java_argfile_rejects_second_reference(self):
+        folder = self.root / "Java Args"
+        folder.mkdir(exist_ok=True)
+        argfile = folder / "java.args"
+        argfile.write_text('--gameDir "' + str(self.game_dir) + '"', encoding="utf-8")
+        command_line = 'java @"' + str(argfile) + '" @"' + str(argfile) + '"'
+        with self.assertRaisesRegex(lab.LabError, "at most one"):
+            lab._launch_game_dir(command_line, datetime.now(timezone.utc))
 
     def test_bad_binding_rejected(self):
         class Result:
@@ -265,6 +329,24 @@ class LabTests(unittest.TestCase):
         self.scenario["action"] = {"tool": "execute_command", "params": {"command": "say hi"}}
         self.save_inputs()
         self.assertEqual(self.run_capture()["status"], "unsupported")
+
+    def test_use_item_is_bounded_and_reported(self):
+        self.scenario["action"] = {"tool": "use_item", "params": {}}
+        self.save_inputs()
+        result = self.run_capture()
+        self.assertEqual(result["status"], "captured")
+        self.assertEqual(result["action"], self.scenario["action"])
+
+    def test_use_item_rejects_parameters(self):
+        self.scenario["action"] = {"tool": "use_item", "params": {"command": "say hi"}}
+        self.save_inputs()
+        self.assertEqual(self.run_capture()["status"], "unsupported")
+
+    def test_use_item_screen_assertion_failure(self):
+        self.scenario["action"] = {"tool": "use_item", "params": {}}
+        self.scenario["expect"]["after_screen"] = "ExpectedBookScreen"
+        self.save_inputs()
+        self.assertEqual(self.run_capture()["status"], "fail")
 
     def test_missing_screen_assertion_is_unsupported(self):
         del self.scenario["expect"]["after_screen"]

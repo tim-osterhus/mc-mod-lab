@@ -7,10 +7,12 @@ import binascii
 import ctypes
 import hashlib
 import json
+import ntpath
 import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -111,7 +113,7 @@ def launch_check(identity):
         raise LabError("PowerShell is required to inspect the selected process")
     pid = identity["pid"]
     command = (f'$p=Get-CimInstance Win32_Process -Filter "ProcessId = {pid}"; '
-               "if($p){[pscustomobject]@{CommandLine=$p.CommandLine;"
+               "if($p){[pscustomobject]@{ProcessId=$p.ProcessId;CommandLine=$p.CommandLine;"
                "Created=$p.CreationDate.ToUniversalTime().ToString('o')} | ConvertTo-Json -Compress}")
     result = subprocess.run([shell, "-NoProfile", "-Command", command], capture_output=True,
                             text=True, timeout=10, check=False)
@@ -119,12 +121,16 @@ def launch_check(identity):
         raise LabError("selected process command line is unavailable")
     try:
         process = json.loads(result.stdout)
-        command_line = process["CommandLine"].replace("/", "\\").casefold()
-        game_dir = str(Path(identity["game_dir"]).resolve()).replace("/", "\\").casefold()
+        if process["ProcessId"] != pid or not isinstance(process["CommandLine"], str):
+            raise ValueError("unexpected process metadata")
         started = datetime.fromisoformat(process["Created"])
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise LabError("selected process metadata is invalid") from exc
-    if game_dir not in command_line or "java" not in command_line:
+    if started.tzinfo is None:
+        raise LabError("selected process metadata is invalid")
+    game_dir = str(Path(identity["game_dir"]).resolve()).replace("/", "\\").casefold()
+    launched_dir = _launch_game_dir(process["CommandLine"], started)
+    if launched_dir != game_dir:
         raise LabError("selected process command line does not identify declared game_dir")
     log = Path(identity["launch_log"])
     if log.stat().st_mtime < started.timestamp() - 120:
@@ -134,6 +140,62 @@ def launch_check(identity):
     if not re.search(r"Loading Minecraft 1\.21\.1 with Fabric Loader", start, re.IGNORECASE):
         raise LabError("fresh launch log does not confirm Minecraft 1.21.1 Fabric")
     return True
+
+
+def _launch_game_dir(command_line, started):
+    argc = ctypes.c_int()
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    shell32.CommandLineToArgvW.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int)]
+    shell32.CommandLineToArgvW.restype = ctypes.POINTER(ctypes.c_wchar_p)
+    argv = shell32.CommandLineToArgvW(command_line, ctypes.byref(argc))
+    if not argv:
+        raise LabError("selected process arguments are unavailable")
+    try:
+        args = [argv[index] for index in range(argc.value)]
+    finally:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree(ctypes.cast(argv, ctypes.c_void_p))
+    if not args or ntpath.basename(args[0]).casefold() not in {"java", "java.exe", "javaw.exe"}:
+        raise LabError("selected process is not a Java launcher")
+    if "--disable-@files" in args:
+        raise LabError("Java argument-file expansion is disabled")
+    references = [arg[1:] for arg in args[1:] if arg.startswith("@")]
+    if len(references) > 1 or any(not reference for reference in references):
+        raise LabError("selected process must reference at most one Java argument file")
+    if references:
+        reference = Path(references[0])
+        if not reference.is_absolute() or reference.drive.startswith("\\\\") or reference.is_symlink():
+            raise LabError("Java argument file must be a local absolute file")
+        try:
+            resolved = reference.resolve(strict=True)
+            if resolved.drive.startswith("\\\\") or not resolved.is_file():
+                raise OSError("not a local file")
+            before = resolved.stat()
+            if before.st_size > 1024 * 1024 or before.st_mtime > started.timestamp():
+                raise OSError("argument file changed after launch or exceeds limit")
+            content = resolved.read_text(encoding="utf-8")
+            after = resolved.stat()
+            if (after.st_size, after.st_mtime_ns, after.st_ino) != (
+                    before.st_size, before.st_mtime_ns, before.st_ino):
+                raise OSError("argument file changed during inspection")
+            file_args = shlex.split(content, comments=True, posix=True)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise LabError("Java argument file is unreadable or untrusted") from exc
+        if any(arg.startswith("@") or arg == "--disable-@files" for arg in file_args):
+            raise LabError("nested Java argument files are unsupported")
+        index = next(i for i, arg in enumerate(args) if arg.startswith("@"))
+        args = args[:index] + file_args + args[index + 1:]
+    positions = [index for index, arg in enumerate(args) if arg == "--gameDir"]
+    if len(positions) != 1 or positions[0] + 1 >= len(args):
+        raise LabError("selected process must have exactly one --gameDir argument")
+    value = args[positions[0] + 1]
+    if value.startswith("-") or not Path(value).is_absolute():
+        raise LabError("selected process has an invalid --gameDir value")
+    try:
+        return str(Path(value).resolve(strict=True)).replace("/", "\\").casefold()
+    except OSError as exc:
+        raise LabError("selected process command line does not identify declared game_dir") from exc
 
 
 def check_derivative(identity):
@@ -284,7 +346,7 @@ def verify_security(identity):
 
 def command(identity, name, params=None):
     allowed = {"get_world_info", "get_player_info", "get_screen_buttons", "click", "press_key",
-               "click_button_index", "enter_control_mode", "exit_control_mode"}
+               "click_button_index", "use_item", "enter_control_mode", "exit_control_mode"}
     if name not in allowed:
         raise LabError("command is outside the bounded workflow")
     listening_socket(identity["pid"], identity["port"])
@@ -411,6 +473,9 @@ def validate_scenario(scenario):
     elif action.get("tool") == "click_button_index":
         if set(params) != {"index"} or not isinstance(params["index"], int) or not 0 <= params["index"] <= 20:
             raise LabError("click_button_index requires index 0 through 20")
+    elif action.get("tool") == "use_item":
+        if params != {}:
+            raise LabError("use_item takes no parameters")
     else:
         raise LabError("only one bounded GUI action is supported")
     return action
