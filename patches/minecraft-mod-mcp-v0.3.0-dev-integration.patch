@@ -1,0 +1,91 @@
+diff --git a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+--- a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
++++ b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+@@ -167,12 +167,21 @@ public class ReflectedInputHandler extends McpMessageHandler implements McpProtocol.MinecraftInput {
+     public void pressKey(String key, float holdSeconds) {
+         executor.executeOnRenderThread(() -> {
+             try {
+-                int c = GlfwKeys.keyCode(key);
++                String keyName = key.toUpperCase(java.util.Locale.ROOT);
++                if (keyName.equals("ESC")) keyName = "ESCAPE";
++                if (keyName.equals("CTRL")) keyName = "LEFT_CONTROL";
++                if (keyName.equals("SHIFT")) keyName = "LEFT_SHIFT";
++                int c = Class.forName("org.lwjgl.glfw.GLFW").getField("GLFW_KEY_" + keyName).getInt(null);
+                 if (c < 0) return;
+-                String result = ReflectionHelper.guiKeyPress(mc(), c, 0, 1, 0);
++                Object keyboard = mc().getClass().getField("keyboardHandler").get(mc());
++                Method keyPress = keyboard.getClass().getMethod("keyPress", long.class,
++                        int.class, int.class, int.class, int.class);
++                long window = (Long) getWindow(mc()).getClass().getMethod("getWindow").invoke(getWindow(mc()));
++                keyPress.invoke(keyboard, window, c, 0, 1, 0);
++                String result = "dispatched";
+                 ReflectionHelper.dbg("guiKeyPress: " + result);
+                 Thread.sleep(holdSeconds > 0 ? (long)(holdSeconds * 1000) : 30);
+-                result = ReflectionHelper.guiKeyPress(mc(), c, 0, 0, 0);
++                keyPress.invoke(keyboard, window, c, 0, 0, 0);
+                 ReflectionHelper.dbg("guiKeyPress release: " + result);
+             } catch (Exception e) { System.err.println("[Input] Key: " + e.getMessage()); }
+         });
+@@ -389,14 +398,60 @@ public class ReflectedInputHandler extends McpMessageHandler implements McpProtocol.MinecraftInput {
+ 
+     @Override
+     public String executeCommand(String command) {
+-        return ReflectionHelper.sendCommand(mc(), command);
++        final CountDownLatch latch = new CountDownLatch(1);
++        final String[] result = {"{\"error\":\"command timed out\"}"};
++        try {
++            final Object server = mc().getClass().getMethod("getSingleplayerServer").invoke(mc());
++            if (server == null) return "{\"error\":\"singleplayer fixture required\"}";
++            server.getClass().getMethod("execute", Runnable.class).invoke(server, (Runnable) () -> {
++                try {
++                    Object player = mc().getClass().getField("player").get(mc());
++                    Object uuid = player.getClass().getMethod("getUUID").invoke(player);
++                    Object players = server.getClass().getMethod("getPlayerList").invoke(server);
++                    Object serverPlayer = players.getClass().getMethod("getPlayer", java.util.UUID.class).invoke(players, uuid);
++                    Object source = serverPlayer.getClass().getMethod("createCommandSourceStack").invoke(serverPlayer);
++                    Object commands = server.getClass().getMethod("getCommands").invoke(server);
++                    Object dispatcher = commands.getClass().getMethod("getDispatcher").invoke(commands);
++                    Object value = dispatcher.getClass().getMethod("execute", String.class, Object.class)
++                            .invoke(dispatcher, command.startsWith("/") ? command.substring(1) : command, source);
++                    result[0] = "{\"command_result\":" + value + "}";
++                } catch (Exception error) {
++                    Throwable cause = error.getCause() == null ? error : error.getCause();
++                    java.util.Map<String, String> failure = new java.util.HashMap<>();
++                    failure.put("error", cause.toString());
++                    result[0] = McpProtocol.GSON.toJson(failure);
++                } finally { latch.countDown(); }
++            });
++            latch.await(5, TimeUnit.SECONDS);
++        } catch (Exception error) {
++            return "{\"error\":\"singleplayer command unavailable\"}";
++        }
++        return result[0];
+     }
+ 
+     @Override
+     public String getPlayerInfo() { return ReflectionHelper.getPlayerInfo(mc()); }
+ 
+     @Override
+-    public String getWorldInfo() { return ReflectionHelper.getWorldInfo(mc()); }
++    public String getWorldInfo() {
++        try {
++            Object server = mc().getClass().getMethod("getSingleplayerServer").invoke(mc());
++            if (server == null) return "{\"error\":\"singleplayer fixture required\"}";
++            Object data = server.getClass().getMethod("getWorldData").invoke(server);
++            Class<?> resourceClass = Class.forName("net.minecraft.world.level.storage.LevelResource");
++            Object root = resourceClass.getField("ROOT").get(null);
++            java.nio.file.Path path = (java.nio.file.Path) server.getClass()
++                    .getMethod("getWorldPath", resourceClass).invoke(server, root);
++            java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
++            result.put("world_name", data.getClass().getMethod("getLevelName").invoke(data));
++            result.put("world_path", path.toRealPath().toString());
++            result.put("difficulty", data.getClass().getMethod("getDifficulty").invoke(data).toString());
++            result.put("gametype", data.getClass().getMethod("getGameType").invoke(data).toString());
++            return McpProtocol.GSON.toJson(result);
++        } catch (Exception error) {
++            return "{\"error\":\"singleplayer identity unavailable\"}";
++        }
++    }
+ 
+     public String debugFields() { return ReflectionHelper.debugFields(mc()); }
+ }
