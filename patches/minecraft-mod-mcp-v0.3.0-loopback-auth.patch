@@ -1,0 +1,75 @@
+diff --git a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/McpHttpServer.java b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/McpHttpServer.java
+--- a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/McpHttpServer.java
++++ b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/McpHttpServer.java
+@@ -18,6 +18,7 @@ public class McpHttpServer {
+     private static final int PORT_START = McpConfig.PORT_START;
+     private static final int PORT_END = McpConfig.PORT_END;
+     private HttpServer server;
++    private byte[] expectedAuthorization;
+     private final McpMessageHandler handler;
+     private int port;
+     private final List<CallEvent> callHistory = new CopyOnWriteArrayList<>();
+@@ -72,15 +73,20 @@ public class McpHttpServer {
+     }
+ 
+     public void start() throws IOException {
++        String token = System.getenv("MC_MOD_LAB_TOKEN");
++        if (token == null || token.length() < 32) {
++            throw new IOException("MC_MOD_LAB_TOKEN must contain at least 32 characters");
++        }
++        expectedAuthorization = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
+         int configuredPort = this.port;
+         if (configuredPort > 0) {
+-            server = HttpServer.create(new InetSocketAddress("0.0.0.0", configuredPort), 0);
++            server = HttpServer.create(new InetSocketAddress("127.0.0.1", configuredPort), 0);
+             port = configuredPort;
+         } else {
+             IOException lastErr = null;
+             for (int p = PORT_START; p >= PORT_END; p--) {
+                 try {
+-                    server = HttpServer.create(new InetSocketAddress("0.0.0.0", p), 0);
++                    server = HttpServer.create(new InetSocketAddress("127.0.0.1", p), 0);
+                     port = p;
+                     lastErr = null;
+                     break;
+@@ -91,17 +97,33 @@ public class McpHttpServer {
+             if (lastErr != null) throw lastErr;
+         }
+         server.setExecutor(Executors.newFixedThreadPool(8));
+-        server.createContext("/api/screenshot", new ScreenshotHandler());
+-        server.createContext("/api/cmd", new CmdHandler());
+-        server.createContext("/api/events", new EventHandler());
+-        server.createContext("/api/calls", new CallsHandler());
+-        server.createContext("/api/status", exchange -> {
++        addAuthenticatedContext("/api/screenshot", new ScreenshotHandler());
++        addAuthenticatedContext("/api/cmd", new CmdHandler());
++        addAuthenticatedContext("/api/events", new EventHandler());
++        addAuthenticatedContext("/api/calls", new CallsHandler());
++        addAuthenticatedContext("/api/status", exchange -> {
+             sendJson(exchange, 200, buildStatusJson());
+         });
+-        server.createContext("/debug", new StaticHandler());
+-        server.createContext("/", new RootHandler());
++        addAuthenticatedContext("/debug", new StaticHandler());
++        addAuthenticatedContext("/", new RootHandler());
+         server.start();
+         ReflectionHelper.dbg("McpHttpServer: started on port " + port);
+     }
+ 
++    private void addAuthenticatedContext(String path, HttpHandler handler) {
++        server.createContext(path, exchange -> {
++            if (exchange.getRequestHeaders().getFirst("Origin") != null) {
++                sendJson(exchange, 403, "{\"error\":\"browser origins are not allowed\"}");
++                return;
++            }
++            String authorization = exchange.getRequestHeaders().getFirst("Authorization");
++            if (authorization == null || !java.security.MessageDigest.isEqual(
++                    expectedAuthorization, authorization.getBytes(StandardCharsets.UTF_8))) {
++                sendJson(exchange, 401, "{\"error\":\"authentication required\"}");
++                return;
++            }
++            handler.handle(exchange);
++        });
++    }
++
+     private String buildStatusJson() {

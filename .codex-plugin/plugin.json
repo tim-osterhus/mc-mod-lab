@@ -1,0 +1,22 @@
+{
+  "name": "mc-mod-lab",
+  "version": "0.1.0",
+  "description": "Evidence-backed Minecraft mod QA fixtures and reports.",
+  "author": {
+    "name": "Tim Osterhus",
+    "email": "tim@millrace.ai",
+    "url": "https://github.com/tim-osterhus"
+  },
+  "repository": "https://github.com/tim-osterhus/mc-mod-lab",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Minecraft Mod Lab",
+    "shortDescription": "Build disposable fixtures and audit client evidence.",
+    "longDescription": "Small local tooling for fixture-based mod verification. Live client transport remains unsupported until a safe bridge is vetted.",
+    "developerName": "Tim Osterhus",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Audit a Minecraft mod fixture and its evidence."]
+  }
+}

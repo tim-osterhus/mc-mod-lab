@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "id": "open-guide-screen",
+  "action": {"tool": "click", "params": {"x": 400, "y": 300}},
+  "expect": {"world_name": "LabFixture", "after_screen": "GuideScreen"}
+}

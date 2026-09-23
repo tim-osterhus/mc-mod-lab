@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "id": "open-inventory",
+  "action": {"tool": "press_key", "params": {"key": "E"}},
+  "expect": {"world_name": "LabFixture", "after_screen": "InventoryScreen"}
+}

@@ -1,0 +1,29 @@
+diff --git a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+--- a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
++++ b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+@@ -136,7 +136,24 @@ public class ReflectedInputHandler extends McpMessageHandler implements McpProtocol.MinecraftInput {
+         executor.executeOnRenderThread(() -> {
+             try {
+                 int b = "right".equals(button) ? 1 : "middle".equals(button) ? 2 : 0;
+-                lastClickResult = ReflectionHelper.guiClick(mc(), x, y, b);
++                Object screen = ScreenInteractionHelper.getCurrentScreen(mc());
++                if (screen == null) throw new IllegalStateException("no screen");
++                int guiWidth = screen.getClass().getField("width").getInt(screen);
++                int guiHeight = screen.getClass().getField("height").getInt(screen);
++                java.nio.IntBuffer viewport = java.nio.ByteBuffer.allocateDirect(16)
++                        .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
++                Class.forName("org.lwjgl.opengl.GL11").getMethod("glGetIntegerv", int.class,
++                        java.nio.IntBuffer.class).invoke(null, 0x0BA2, viewport);
++                if (x < 0 || y < 0 || x >= viewport.get(2) || y >= viewport.get(3)) {
++                    throw new IllegalArgumentException("click outside framebuffer");
++                }
++                double gx = (double) x * guiWidth / viewport.get(2);
++                double gy = (double) y * guiHeight / viewport.get(3);
++                boolean handled = (Boolean) screen.getClass().getMethod("mouseClicked",
++                        double.class, double.class, int.class).invoke(screen, gx, gy, b);
++                screen.getClass().getMethod("mouseReleased", double.class, double.class,
++                        int.class).invoke(screen, gx, gy, b);
++                lastClickResult = "{\"clicked\":" + handled + ",\"method\":\"screen-event\"}";
+                 ReflectionHelper.dbg("guiClick: " + lastClickResult);
+             } catch (Exception e) { lastClickResult = "{\"error\":\"" + e.getMessage() + "\"}"; }
+             latch.countDown();

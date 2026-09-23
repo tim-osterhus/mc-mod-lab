@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "minecraft_version": "1.21.1",
+  "loader": "fabric",
+  "pid": 12345,
+  "world_name": "LabFixture",
+  "expected_gamemode": "creative",
+  "world_path": "REPLACE_WITH_ABSOLUTE_DISPOSABLE_WORLD_PATH",
+  "game_dir": "REPLACE_WITH_ABSOLUTE_DISPOSABLE_GAME_DIRECTORY",
+  "launch_log": "REPLACE_WITH_ABSOLUTE_GAME_DIRECTORY_LOG_PATH",
+  "fixture_id": "guide-baseline",
+  "bridge_release": "0.3.0",
+  "bridge_jar": "REPLACE_WITH_ABSOLUTE_HARDENED_JAR_PATH",
+  "upstream_sha256": "55aab04b1d7ac9203817e071cb83b6d6cf3da7164636867da33877750de64636",
+  "derivative_sha256": "REPLACE_WITH_FINAL_AUTHENTICATED_DERIVATIVE_SHA256",
+  "max_group_mb": 3800,
+  "min_capture_width": 1280,
+  "min_capture_height": 720,
+  "tracked_pids": [12345],
+  "informational_pids": []
+}

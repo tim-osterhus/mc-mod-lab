@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "feature": "example.guide_opening",
+  "requirement": "Using the guide item opens a readable screen.",
+  "reference": {"source": "Replace with a public reference URL or named evidence bundle", "timestamp": "00:00:00"},
+  "deterministic_test": {"status": "not_run", "artifact": null},
+  "client_check": {"status": "not_run", "artifact": null},
+  "visual_check": {"status": "not_run", "artifact": null},
+  "exceptions": []
+}
