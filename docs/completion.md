@@ -14,7 +14,7 @@ authorized; global installation and public directory submission are separate.
   failure documented in the sanitized pilot checkpoint.
 - Public repository, MIT project license, attribution, and lightweight unit CI.
 
-## Finite remaining acceptance
+## Completed alpha acceptance
 
 - [x] B1: parity manifest and capture report validation, dated references,
   independent verification dimensions, artifact integrity and portable paths.
@@ -25,7 +25,7 @@ authorized; global installation and public directory submission are separate.
 - [x] B4: allowlisted clean plugin package and isolated temporary-config install
   smoke; execute the installed skill's CLI from its installed location.
 - [x] B5: actionable setup/rebuild, evidence collection/review, and reset docs.
-- [ ] B6: CI contract/package/portable-path/secret checks and reviewed public
+- [x] B6: CI contract/package/portable-path/secret checks and reviewed public
   checkpoint with no runtime artifacts or user-specific paths.
 
 ## Intentionally unsupported
@@ -38,4 +38,6 @@ and authority limits do not depend on completing Aura.
 
 The parent completed the second live fixture in a serialized slot. See the
 [alpha evidence record](checkpoints/2026-09-22-alpha.md) for results and scope.
-B6 remains in progress until the final CI/release audit and public push finish.
+All six deliverables are complete. Checkpoint `7461920` passed the Windows and
+Linux [hosted release checks](https://github.com/tim-osterhus/mc-mod-lab/actions/runs/35846571201).
+No alpha acceptance item is waiting on the full Aura port or another live slot.
