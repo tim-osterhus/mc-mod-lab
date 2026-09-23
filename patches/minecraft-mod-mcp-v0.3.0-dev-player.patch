@@ -1,0 +1,26 @@
+diff --git a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+--- a/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
++++ b/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/ReflectedInputHandler.java
+@@ -430,7 +430,21 @@ public class ReflectedInputHandler extends McpMessageHandler implements McpProtocol.MinecraftInput {
+     }
+ 
+     @Override
+-    public String getPlayerInfo() { return ReflectionHelper.getPlayerInfo(mc()); }
++    public String getPlayerInfo() {
++        try {
++            Object player = mc().getClass().getField("player").get(mc());
++            if (player == null) return "{\"error\":\"no player\"}";
++            Object profile = player.getClass().getMethod("getGameProfile").invoke(player);
++            Object mode = mc().getClass().getField("gameMode").get(mc());
++            com.google.gson.JsonObject result = McpProtocol.GSON.fromJson(
++                    ReflectionHelper.getPlayerInfo(mc()), com.google.gson.JsonObject.class);
++            result.addProperty("name", (String) profile.getClass().getMethod("getName").invoke(profile));
++            result.addProperty("gamemode", mode.getClass().getMethod("getPlayerMode").invoke(mode).toString());
++            return McpProtocol.GSON.toJson(result);
++        } catch (Exception error) {
++            return "{\"error\":\"player identity unavailable\"}";
++        }
++    }
+ 
+     @Override
+     public String getWorldInfo() {

@@ -20,7 +20,8 @@ $patches = @(
     (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-loopback-auth.patch"),
     (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-framebuffer.patch"),
     (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-dev-click.patch"),
-    (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-dev-integration.patch")
+    (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-dev-integration.patch"),
+    (Join-Path $repoRoot "patches/minecraft-mod-mcp-v0.3.0-dev-player.patch")
 )
 $upstream = (Resolve-Path -LiteralPath $UpstreamJar).Path
 $gson = (Resolve-Path -LiteralPath $GsonJar).Path
