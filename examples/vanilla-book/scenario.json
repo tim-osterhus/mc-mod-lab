@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "id": "vanilla-written-book",
+  "action": {"tool": "use_item", "params": {}},
+  "expect": {"after_screen": "BookViewScreen"}
+}
