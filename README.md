@@ -27,6 +27,13 @@ python lab.py capture --identity identity.json --scenario examples/inventory-sce
 python -m unittest discover -s tests -v
 ```
 
+Live commands use the standard library. Evidence validation and the full test
+suite also require `python -m pip install -r requirements.txt` in a local virtual
+environment. See [portable replay and evidence validation](docs/evidence.md) for
+the offline failing/corrected example, and the [completion ledger](docs/completion.md)
+for the finite alpha acceptance list. The [second vanilla fixture](docs/vanilla-fixture.md)
+uses the same portable written-book scenario on a fresh disposable save.
+
 `fixture create` makes a uniquely named copy and marker. It never deletes or overwrites an existing save. Choose the new copy in an isolated launcher instance, then fill local `identity.json` from [the example](examples/identity.example.json). The example is a contract, not runnable credentials or a real path. Keep identity files, worlds, logs, and screenshots out of publication unless reviewed. The report records only selected state fields, screenshot hashes/dimensions, and relative artifact names.
 
 Set `MC_MOD_LAB_TOKEN` only in the current process/session environment. Never put it in `identity.json`, command arguments, logs, or committed files. The token is not emitted in reports.

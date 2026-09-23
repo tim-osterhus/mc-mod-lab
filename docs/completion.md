@@ -16,9 +16,9 @@ authorized; global installation and public directory submission are separate.
 
 ## Finite remaining acceptance
 
-- [ ] B1: parity manifest and capture report validation, dated references,
+- [x] B1: parity manifest and capture report validation, dated references,
   independent verification dimensions, artifact integrity and portable paths.
-- [ ] B2: reproducible offline failing/corrected evidence workflow using the same
+- [x] B2: reproducible offline failing/corrected evidence workflow using the same
   assertion code as live capture, explicitly labeled synthetic replay.
 - [ ] B3: second vanilla fixture procedure, reset semantics, and live acceptance
   coordinated with the parent runtime owner.

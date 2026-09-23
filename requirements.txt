@@ -1,0 +1,2 @@
+# Used by evidence validation; live doctor/capture remain standard-library only.
+jsonschema==4.19.0

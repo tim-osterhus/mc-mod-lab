@@ -77,13 +77,18 @@ class LabTests(unittest.TestCase):
         raise AssertionError(command)
 
     def run_capture(self, http=None, memory=100):
+        out = self.root / "report"
+        index = 1
+        while out.exists():
+            out = self.root / ("report-" + str(index))
+            index += 1
         with patch.object(lab, "listening_socket", return_value=True), \
              patch.object(lab, "launch_check", return_value=True), \
              patch.object(lab, "verify_security", return_value=True), \
              patch.object(lab, "process_mb", side_effect=lambda pid: memory(pid) if callable(memory) else memory), \
              patch.object(lab, "available_mb", return_value=1000), \
              patch.object(lab, "http_json", side_effect=http or self.fake_http):
-            return lab.capture(self.identity_path, self.scenario_path, self.root / "report")
+            return lab.capture(self.identity_path, self.scenario_path, out)
 
     def test_fresh_fixture_never_overwrites_seed(self):
         second = lab.fixture_create(self.seed, self.root / "fixtures", "guide-baseline", "LabFixture")

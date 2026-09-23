@@ -28,6 +28,10 @@ MARKER = ".mc-mod-lab-fixture.json"
 BRIDGE_VERSION = "0.3.0"
 UPSTREAM_SHA256 = "55aab04b1d7ac9203817e071cb83b6d6cf3da7164636867da33877750de64636"
 MAX_TOOL_GROUP_MB = 3800
+IDENTITY_REQUIRED = ("minecraft_version", "loader", "pid", "port", "world_name", "world_path",
+                     "fixture_id", "bridge_jar", "upstream_sha256", "derivative_sha256",
+                     "max_group_mb", "tracked_pids", "min_capture_width", "min_capture_height",
+                     "game_dir", "launch_log", "expected_gamemode")
 
 
 class LabError(Exception):
@@ -58,11 +62,7 @@ def sha256(path):
 
 
 def validate_identity(identity):
-    required = ("minecraft_version", "loader", "pid", "port", "world_name", "world_path",
-                "fixture_id", "bridge_jar", "upstream_sha256", "derivative_sha256",
-                "max_group_mb", "tracked_pids", "min_capture_width", "min_capture_height",
-                "game_dir", "launch_log", "expected_gamemode")
-    if identity.get("schema_version") != 1 or any(key not in identity for key in required):
+    if identity.get("schema_version") != 1 or any(key not in identity for key in IDENTITY_REQUIRED):
         raise LabError("identity schema is incomplete")
     if (identity["minecraft_version"] != "1.21.1" or identity["loader"] != "fabric"
             or identity.get("bridge_release") != BRIDGE_VERSION):
@@ -487,6 +487,7 @@ def write_report(out, report):
                            for path in (out / "before.png", out / "after.png") if path.is_file()]
     write_json(out / "report.json", report)
     lines = ["# Minecraft Mod Lab capture", "", f"Status: **{report['status']}**", "",
+             "Evidence kind: " + report.get("evidence_kind", "unspecified_legacy"), "",
              f"Scenario: `{report.get('scenario', 'unknown')}`", "",
              f"Reason: {report.get('reason', 'none')}", "",
              "Client check: " + report.get("client_check", "not_run"),
@@ -495,7 +496,10 @@ def write_report(out, report):
 
 
 def capture(identity_path, scenario_path, out):
+    if out.exists():
+        raise LabError("capture output already exists; choose a fresh directory")
     report = {"schema_version": 1, "created_at": now(), "status": "unsupported",
+              "evidence_kind": "live",
               "client_check": "not_run", "visual_check": "not_reviewed",
               "bridge": "Minecraft Mod MCP v0.3.0 hardened derivative"}
     try:
@@ -505,6 +509,7 @@ def capture(identity_path, scenario_path, out):
         report["scenario"] = scenario.get("id", "unknown")
         validate_identity(identity)
         action = validate_scenario(scenario)
+        report["expect"] = scenario["expect"]
         report["instance"] = {"minecraft_version_claim": identity["minecraft_version"],
                               "loader_claim": identity["loader"], "pid": identity["pid"],
                               "world_name": identity["world_name"], "fixture_id": identity["fixture_id"]}
@@ -549,12 +554,7 @@ def capture(identity_path, scenario_path, out):
                 report["control_mode_exit"] = "failed"
         if report["control_mode_exit"] != "acknowledged":
             raise LabError("bridge did not restore manual control", "fail")
-        expected = scenario.get("expect", {}).get("world_name", identity["world_name"])
-        if report["after"]["world"]["world_name"] != expected:
-            raise LabError("after world name does not match expectation", "fail")
-        expected_screen = scenario.get("expect", {}).get("after_screen")
-        if expected_screen is not None and report["after"]["screen_class"] != expected_screen:
-            raise LabError("after screen class does not match expectation", "fail")
+        assert_after(scenario, identity["world_name"], report["after"])
         report["status"] = "captured"
         report["client_check"] = "action_acknowledged_unverified"
         report["reason"] = "GUI semantics, screenshot content, and game-version claim require independent review"
@@ -567,6 +567,14 @@ def capture(identity_path, scenario_path, out):
         report["reason"] = "input or artifact could not be read"
     write_report(out, report)
     return report
+
+
+def assert_after(scenario, world_name, after):
+    expected = scenario["expect"]
+    if after["world"]["world_name"] != expected.get("world_name", world_name):
+        raise LabError("after world name does not match expectation", "fail")
+    if after["screen_class"] != expected["after_screen"]:
+        raise LabError("after screen class does not match expectation", "fail")
 
 
 def fixture_create(seed, root, fixture_id, world_name):
@@ -603,7 +611,32 @@ def main(argv=None):
     run.add_argument("--identity", type=Path, required=True)
     run.add_argument("--scenario", type=Path, required=True)
     run.add_argument("--out", type=Path, required=True)
+    validate = commands.add_parser("validate", help="validate evidence contracts and artifact hashes")
+    validate.add_argument("kind", choices=["parity", "report"])
+    validate.add_argument("path", type=Path)
+    validate.add_argument("--portable", action="store_true")
+    replay = commands.add_parser("replay", help="run the synthetic failing/corrected example without Minecraft")
+    replay.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.command == "validate":
+        from contracts import ContractError, validate_file
+        try:
+            print(json.dumps(validate_file(args.path, args.kind, args.portable)))
+            return 0
+        except ContractError as exc:
+            print(json.dumps({"status": "invalid", "reason": str(exc)}))
+            return 2
+        except (OSError, ValueError, KeyError, TypeError):
+            print(json.dumps({"status": "invalid", "reason": "evidence contract or artifact validation failed"}))
+            return 2
+    if args.command == "replay":
+        from example_replay import replay_example
+        try:
+            print(json.dumps(replay_example(args.out)))
+            return 0
+        except (LabError, OSError, ValueError):
+            print(json.dumps({"status": "unsupported", "reason": "replay requires a fresh writable output directory"}))
+            return 2
     if args.command == "fixture":
         try:
             print(fixture_create(args.seed, args.root, args.id, args.world_name))
@@ -612,7 +645,11 @@ def main(argv=None):
             print(f"unsupported: {exc}", file=sys.stderr)
             return 2
     if args.command == "capture":
-        result = capture(args.identity, args.scenario, args.out)
+        try:
+            result = capture(args.identity, args.scenario, args.out)
+        except (LabError, OSError):
+            print(json.dumps({"status": "unsupported", "reason": "capture requires a fresh writable output directory"}))
+            return 2
         print(json.dumps({"status": result["status"], "reason": result.get("reason")}))
         return 0 if result["status"] == "captured" else 2
     try:

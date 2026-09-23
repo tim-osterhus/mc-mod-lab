@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "feature", "requirement", "reference", "implementation", "deterministic_test", "client_check", "visual_check", "exceptions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "feature": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "requirement": {"type": "string", "minLength": 1},
+    "reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "timestamp", "observed_at"],
+      "properties": {
+        "source": {"type": "string", "pattern": "^(https://|bundle:)[^\\s]+$"},
+        "timestamp": {"type": ["string", "null"], "pattern": "^[0-9]{2,}:[0-5][0-9]:[0-5][0-9]$"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "implementation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "revision"],
+      "properties": {
+        "status": {"enum": ["not_started", "partial", "implemented"]},
+        "revision": {"type": ["string", "null"], "minLength": 1}
+      }
+    },
+    "deterministic_test": {"$ref": "#/$defs/check"},
+    "client_check": {"$ref": "#/$defs/check"},
+    "visual_check": {"$ref": "#/$defs/check"},
+    "exceptions": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["reason", "decision", "approved_by", "recorded_at"],
+        "properties": {
+          "reason": {"type": "string", "minLength": 1},
+          "decision": {"type": "string", "minLength": 1},
+          "approved_by": {"type": "string", "minLength": 1},
+          "recorded_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file", "sha256"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "artifact", "checked_at", "reviewer"],
+      "properties": {
+        "status": {"enum": ["not_run", "pass", "fail", "unsupported"]},
+        "artifact": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/artifact"}]},
+        "checked_at": {"type": ["string", "null"], "format": "date-time"},
+        "reviewer": {"type": ["string", "null"], "minLength": 1}
+      }
+    }
+  }
+}

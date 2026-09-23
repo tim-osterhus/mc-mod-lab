@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "created_at", "status", "client_check", "visual_check", "artifacts", "reason"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "evidence_kind": {"enum": ["live", "synthetic"]},
+    "status": {"enum": ["captured", "fail", "unsupported"]},
+    "client_check": {"enum": ["not_run", "failed", "action_acknowledged_unverified"]},
+    "visual_check": {"const": "not_reviewed"},
+    "reason": {"type": "string", "minLength": 1},
+    "scenario": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "expect": {
+      "type": "object", "required": ["after_screen"],
+      "properties": {"after_screen": {"type": "string", "minLength": 1}, "world_name": {"type": "string", "minLength": 1}}
+    },
+    "before": {"$ref": "#/$defs/snapshot"},
+    "after": {"$ref": "#/$defs/snapshot"},
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "control_mode_exit": {"enum": ["acknowledged", "failed"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "captured"}}},
+     "then": {"required": ["scenario", "before", "after", "action", "control_mode_exit"],
+              "properties": {"client_check": {"const": "action_acknowledged_unverified"}, "control_mode_exit": {"const": "acknowledged"}}}},
+    {"if": {"properties": {"status": {"const": "fail"}}}, "then": {"properties": {"client_check": {"const": "failed"}}}},
+    {"if": {"properties": {"status": {"const": "unsupported"}}}, "then": {"properties": {"client_check": {"const": "not_run"}}}}
+  ],
+  "$defs": {
+    "artifact": {
+      "type": "object", "required": ["file", "sha256"],
+      "properties": {"file": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+    },
+    "snapshot": {
+      "type": "object", "required": ["world", "player", "screen_class", "screenshot"],
+      "properties": {
+        "world": {"type": "object", "required": ["world_name"], "properties": {"world_name": {"type": "string", "minLength": 1}}},
+        "player": {"type": "object"},
+        "screen_class": {"type": ["string", "null"]},
+        "screenshot": {"allOf": [{"$ref": "#/$defs/artifact"}, {"required": ["width", "height"], "properties": {"width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}}}]}
+      }
+    }
+  }
+}

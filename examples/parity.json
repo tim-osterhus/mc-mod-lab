@@ -2,9 +2,10 @@
   "schema_version": 1,
   "feature": "example.guide_opening",
   "requirement": "Using the guide item opens a readable screen.",
-  "reference": {"source": "Replace with a public reference URL or named evidence bundle", "timestamp": "00:00:00"},
-  "deterministic_test": {"status": "not_run", "artifact": null},
-  "client_check": {"status": "not_run", "artifact": null},
-  "visual_check": {"status": "not_run", "artifact": null},
+  "reference": {"source": "bundle:example-contract", "timestamp": null, "observed_at": "2026-09-22T00:00:00Z"},
+  "implementation": {"status": "not_started", "revision": null},
+  "deterministic_test": {"status": "not_run", "artifact": null, "checked_at": null, "reviewer": null},
+  "client_check": {"status": "not_run", "artifact": null, "checked_at": null, "reviewer": null},
+  "visual_check": {"status": "not_run", "artifact": null, "checked_at": null, "reviewer": null},
   "exceptions": []
 }
