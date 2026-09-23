@@ -13,7 +13,7 @@
   "interface": {
     "displayName": "Minecraft Mod Lab",
     "shortDescription": "Build disposable fixtures and audit client evidence.",
-    "longDescription": "Small local tooling for fixture-based mod verification. Live client transport remains unsupported until a safe bridge is vetted.",
+    "longDescription": "Windows Minecraft 1.21.1 Fabric Mojmap development alpha for disposable local fixtures, explicit client identity checks, and bounded GUI capture through a locally hardened, authenticated loopback bridge.",
     "developerName": "Tim Osterhus",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],
