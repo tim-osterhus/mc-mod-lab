@@ -113,7 +113,7 @@ def launch_check(identity):
         raise LabError("PowerShell is required to inspect the selected process")
     pid = identity["pid"]
     command = (f'$p=Get-CimInstance Win32_Process -Filter "ProcessId = {pid}"; '
-               "if($p){[pscustomobject]@{ProcessId=$p.ProcessId;CommandLine=$p.CommandLine;"
+               "if($p){[pscustomobject]@{ProcessId=$p.ProcessId;CommandLine=$p.CommandLine;ExecutablePath=$p.ExecutablePath;"
                "Created=$p.CreationDate.ToUniversalTime().ToString('o')} | ConvertTo-Json -Compress}")
     result = subprocess.run([shell, "-NoProfile", "-Command", command], capture_output=True,
                             text=True, timeout=10, check=False)
@@ -137,9 +137,25 @@ def launch_check(identity):
         raise LabError("launch log predates selected client process")
     with log.open(encoding="utf-8", errors="replace") as stream:
         start = stream.read(512 * 1024)
-    if not re.search(r"Loading Minecraft 1\.21\.1 with Fabric Loader", start, re.IGNORECASE):
+    match = re.search(r"Loading Minecraft 1\.21\.1 with Fabric Loader\s+([0-9][A-Za-z0-9.+-]*)", start, re.IGNORECASE)
+    if not match:
         raise LabError("fresh launch log does not confirm Minecraft 1.21.1 Fabric")
-    return True
+    return {"minecraft_version": "1.21.1", "fabric_loader_version": match.group(1),
+            "jdk_version": jdk_release_version(process.get("ExecutablePath")),
+            "version_source": "selected_process_and_fresh_launch_log"}
+
+
+def jdk_release_version(executable):
+    if not isinstance(executable, str) or not Path(executable).is_absolute():
+        return "unknown"
+    try:
+        release = Path(executable).resolve(strict=True).parent.parent / "release"
+        with release.open(encoding="utf-8") as stream:
+            text = stream.read(65536)
+        match = re.search(r'^JAVA_VERSION="([0-9][A-Za-z0-9.+_-]*)"$', text, re.MULTILINE)
+        return match.group(1) if match else "unknown"
+    except (OSError, UnicodeError):
+        return "unknown"
 
 
 def _launch_game_dir(command_line, started):
@@ -519,7 +535,7 @@ def capture(identity_path, scenario_path, out):
         report["memory_guard"] = {"tool_group_limit_mb": identity["max_group_mb"],
                                   "tool_group_pid_count": len(set(identity["tracked_pids"])),
                                   "informational_pid_count": len(set(identity.get("informational_pids", [])))}
-        launch_check(identity)
+        report["launch_evidence"] = launch_check(identity)
         group_mb(identity)
         status_check(identity)
         report["before"] = snapshot(identity, out, "before")
@@ -656,7 +672,7 @@ def main(argv=None):
         identity = read_json(args.identity)
         validate_identity(identity)
         digest = check_derivative(identity)
-        launch_check(identity)
+        launch = launch_check(identity)
         memory = group_mb(identity)
         status = status_check(identity)
         world = world_check(identity)
@@ -668,11 +684,19 @@ def main(argv=None):
                           "combined_telemetry_mb": combined_telemetry_mb(identity),
                           "tool_group_limit_mb": identity["max_group_mb"],
                           "available_memory_mb": available_mb(),
-                          "minecraft_version": "verified_from_fresh_launch_log",
+                          "minecraft_version": launch["minecraft_version"],
+                          "fabric_loader_version": launch["fabric_loader_version"],
+                          "jdk_version": launch["jdk_version"],
+                          "jdk_version_source": "selected_executable_release_file",
+                          "fixture_id": identity["fixture_id"], "world_path_verified": True,
+                          "capabilities": {"identity": "verified", "authenticated_loopback": "verified",
+                                           "capture": "not_exercised_by_doctor", "visual_review": "manual",
+                                           "production_runtime": "unsupported"},
                           "bridge_status_version": status.get("version")}, indent=2))
         return 0
     except (LabError, OSError, ValueError, KeyError, TypeError) as exc:
-        print(json.dumps({"status": "unsupported", "reason": str(exc)}))
+        reason = str(exc) if isinstance(exc, LabError) else "identity or runtime evidence could not be read"
+        print(json.dumps({"status": "unsupported", "reason": reason}))
         return 2
 
 

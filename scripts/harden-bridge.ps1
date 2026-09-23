@@ -14,6 +14,7 @@ $sourceHashes = @{
     "ScreenshotHelper.java" = "90382b6bb0153c7461aa9799f7edf647771d14c3afbb48dc1a08a1668b901063"
 }
 $upstreamSha256 = "55aab04b1d7ac9203817e071cb83b6d6cf3da7164636867da33877750de64636"
+$gsonSha256 = "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593"
 $sourceRoot = "packages/common/src/main/java/xyz/langyo/minecraft/mcp/common"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $patches = @(
@@ -30,6 +31,9 @@ $output = [IO.Path]::GetFullPath($OutputJar)
 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $upstream).Hash.ToLowerInvariant() -ne $upstreamSha256) {
     throw "Upstream JAR does not match pinned v0.3.0 release asset"
+}
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $gson).Hash.ToLowerInvariant() -ne $gsonSha256) {
+    throw "Gson JAR does not match pinned 2.10.1 compiler dependency"
 }
 if (Test-Path -LiteralPath $work) { throw "WorkDirectory already exists; choose a new empty path" }
 if (Test-Path -LiteralPath $output) { throw "OutputJar already exists; refusing overwrite" }

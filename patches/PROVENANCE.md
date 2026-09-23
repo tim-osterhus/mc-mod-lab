@@ -2,6 +2,7 @@
 
 - Upstream: [langyo/minecraft-mod-mcp](https://github.com/langyo/minecraft-mod-mcp), tag `v0.3.0`, commit `50e059dccb09a9e23b91833ffdbf42efd97fa6e6`.
 - Original 1.21.1 Fabric release asset: `minecraft-mcp-1.21.1-fabric-v0.3.0.jar`, SHA-256 `55aab04b1d7ac9203817e071cb83b6d6cf3da7164636867da33877750de64636`.
+- Compiler dependency: Gson 2.10.1, SHA-256 `4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593`, verified from the local cached Maven artifact; rebuild rejects other bytes.
 - Upstream `McpHttpServer.java` at that commit: SHA-256 `aa77bf3da9829a2e550d9a8e87118b3faa0c2145fffabe5561cd646b2cc442f5`.
 - Upstream `ReflectedInputHandler.java`: SHA-256 `0b661f61021315b478a9f756d387b82a64296f96947d46696129d881c37a186c`.
 - Upstream `ScreenshotHelper.java`: SHA-256 `90382b6bb0153c7461aa9799f7edf647771d14c3afbb48dc1a08a1668b901063`.
@@ -22,6 +23,12 @@ Rebuild on Windows with a `javac` supporting `--release 8`, Git, the verified up
 ./scripts/harden-bridge.ps1 -UpstreamJar C:\path\to\minecraft-mcp-1.21.1-fabric-v0.3.0.jar -GsonJar C:\path\to\gson.jar -OutputJar C:\path\to\hardened.jar -WorkDirectory C:\path\to\new-empty-build-dir -JdkBin C:\path\to\jdk\bin
 ```
 
-This is a narrow patch, not a fork. It does not distribute upstream code or binaries. Preserve and review the upstream repository's `LICENSE-MIT`, `LICENSE-APACHE`, and `LICENSE-CC0` notices when distributing a derivative. The stock npm stdio MCP bridge has no token configuration for this patch and is not a compatible transport. The toolkit uses authenticated direct HTTP on the selected loopback socket.
+This is a narrow patch, not a fork. Patches include portions of upstream source;
+its MIT notice is preserved in `THIRD_PARTY_NOTICES.md`. No upstream binaries are
+distributed. Preserve and review the upstream repository's `LICENSE-MIT`,
+`LICENSE-APACHE`, and `LICENSE-CC0` notices when distributing a derivative. The
+stock npm stdio MCP bridge has no token configuration for this patch and is not a
+compatible transport. The toolkit uses authenticated direct HTTP on the selected
+loopback socket.
 
 The source patches are limited to three upstream classes and a disposable singleplayer Mojmap dev profile. They do not imply production-JAR compatibility or mod parity. The toolkit does not expose `execute_command`; the command path was used only for a controlled bridge proof.

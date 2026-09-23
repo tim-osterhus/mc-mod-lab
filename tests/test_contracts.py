@@ -99,6 +99,14 @@ class ContractTests(unittest.TestCase):
         self.assertFalse(set(lab.IDENTITY_REQUIRED) - set(template))
         self.assertEqual(template["port"], 9876)
 
+    def test_jdk_version_is_read_without_starting_java(self):
+        binary = self.root / "jdk/bin/java.exe"
+        binary.parent.mkdir(parents=True)
+        binary.write_bytes(b"not executable")
+        (binary.parent.parent / "release").write_text('JAVA_VERSION="21.0.12"\n', encoding="utf-8")
+        self.assertEqual(lab.jdk_release_version(str(binary)), "21.0.12")
+        self.assertEqual(lab.jdk_release_version(None), "unknown")
+
     def test_replay_refuses_existing_output(self):
         with self.assertRaises(FileExistsError):
             replay_example(self.root)

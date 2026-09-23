@@ -20,11 +20,11 @@ authorized; global installation and public directory submission are separate.
   independent verification dimensions, artifact integrity and portable paths.
 - [x] B2: reproducible offline failing/corrected evidence workflow using the same
   assertion code as live capture, explicitly labeled synthetic replay.
-- [ ] B3: second vanilla fixture procedure, reset semantics, and live acceptance
+- [x] B3: second vanilla fixture procedure, reset semantics, and live acceptance
   coordinated with the parent runtime owner.
-- [ ] B4: allowlisted clean plugin package and isolated temporary-config install
+- [x] B4: allowlisted clean plugin package and isolated temporary-config install
   smoke; execute the installed skill's CLI from its installed location.
-- [ ] B5: actionable setup/rebuild, evidence collection/review, and reset docs.
+- [x] B5: actionable setup/rebuild, evidence collection/review, and reset docs.
 - [ ] B6: CI contract/package/portable-path/secret checks and reviewed public
   checkpoint with no runtime artifacts or user-specific paths.
 
@@ -36,6 +36,6 @@ generic command execution, destructive reset, dashboards, multiple adapters,
 and automatic visual/parity approval are outside this alpha. These compatibility
 and authority limits do not depend on completing Aura.
 
-The live second fixture requires a serialized runtime slot. Work on B1, B2,
-B4, B5, and B6 can proceed without it. A simulated fixture never closes live
-acceptance. Parent coordination has been requested.
+The parent completed the second live fixture in a serialized slot. See the
+[alpha evidence record](checkpoints/2026-09-22-alpha.md) for results and scope.
+B6 remains in progress until the final CI/release audit and public push finish.

@@ -2,6 +2,11 @@
 
 Minecraft Mod Lab is a thin, local verification toolkit for evidence-backed Minecraft mod development. This alpha supports a disposable save copy, environment doctor, and one bounded before/action/after capture workflow. It does not launch Minecraft, install mods, edit a target mod, or decide visual parity.
 
+Start with [setup and rebuild instructions](docs/setup.md), or run the
+[portable offline example](docs/evidence.md) before preparing a client.
+The [alpha acceptance record](docs/checkpoints/2026-09-22-alpha.md) covers the
+independent second vanilla fixture and isolated plugin installation.
+
 ## Pinned bridge candidate and safety
 
 The candidate is [Minecraft Mod MCP v0.3.0](https://github.com/langyo/minecraft-mod-mcp/releases/tag/v0.3.0), specifically its 1.21.1 Fabric release JAR. The upstream [HTTP server source](https://github.com/langyo/minecraft-mod-mcp/blob/v0.3.0/packages/common/src/main/java/xyz/langyo/minecraft/mcp/common/McpHttpServer.java) binds `0.0.0.0` without authentication. **Do not launch that original JAR for this workflow.** A locally vetted derivative must change both bind sites to `127.0.0.1`, preserve upstream attribution/license, and be reviewed separately. This repo includes a local rebuild recipe, but no upstream or derivative JAR.

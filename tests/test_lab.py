@@ -124,6 +124,7 @@ class LabTests(unittest.TestCase):
         self.save_inputs()
         self.assertEqual(self.run_capture()["status"], "unsupported")
 
+    @unittest.skipUnless(hasattr(lab.ctypes, "WinDLL"), "Windows command-line API")
     def test_launch_check_requires_matching_game_dir(self):
         wrong = self.root / "wrong"
         wrong.mkdir()
@@ -138,6 +139,7 @@ class LabTests(unittest.TestCase):
             with self.assertRaisesRegex(lab.LabError, "game_dir"):
                 lab.launch_check(self.identity)
 
+    @unittest.skipUnless(hasattr(lab.ctypes, "WinDLL"), "Windows command-line API")
     def test_launch_check_accepts_fresh_matching_process_and_log(self):
         class Result:
             returncode = 0
@@ -147,9 +149,13 @@ class LabTests(unittest.TestCase):
         with patch.object(lab.platform, "system", return_value="Windows"), \
              patch.object(lab.shutil, "which", return_value="powershell"), \
              patch.object(lab.subprocess, "run", return_value=Result()):
-            self.assertTrue(lab.launch_check(self.identity))
+            result = lab.launch_check(self.identity)
+            self.assertEqual(result["fabric_loader_version"], "0.19.1")
+            self.assertEqual(result["jdk_version"], "unknown")
 
     def launch_with_argfile(self, content, *, created=None, process_id=123):
+        if not hasattr(lab.ctypes, "WinDLL"):
+            self.skipTest("Windows command-line API")
         folder = self.root / "Java Args"
         folder.mkdir(exist_ok=True)
         argfile = folder / "java.args"
@@ -196,6 +202,7 @@ class LabTests(unittest.TestCase):
         with self.assertRaisesRegex(lab.LabError, "process metadata"):
             self.launch_with_argfile('--gameDir "' + str(self.game_dir) + '"', process_id=456)
 
+    @unittest.skipUnless(hasattr(lab.ctypes, "WinDLL"), "Windows command-line API")
     def test_java_argfile_rejects_second_reference(self):
         folder = self.root / "Java Args"
         folder.mkdir(exist_ok=True)
