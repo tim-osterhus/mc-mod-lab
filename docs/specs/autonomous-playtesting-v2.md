@@ -5,8 +5,9 @@ actual supported CLI, and treat milestones 1-3 as incomplete until their live
 acceptance evidence exists. Target: Minecraft 1.21.1 Fabric first, with Aura
 Cascade Reimagined as the first case study. This document
 specifies reusable Mod Lab engineering. The Aura-specific execution plan and
-coverage ledger live in the Aura repository at
-[docs/specs/aura-playtesting-v2.md](https://github.com/tim-osterhus/aura-cascade-unofficial-port/blob/main/docs/specs/aura-playtesting-v2.md).
+coverage ledger live in the Aura working tree at
+`docs/specs/aura-playtesting-v2.md` (publication pending; the public link is
+not yet a source of truth).
 Neither document claims that an unexecuted mechanic has passed.
 
 ## Decision and boundary
@@ -23,7 +24,7 @@ The first slice must run five proof cases on the exact packaged release JAR:
 
 | Scenario ID | Required real-client check | Known-broken control |
 | --- | --- | --- |
-| `aura-core-pump-flow` | Player supplies crystals/fuel to a prepared ordinary pump circuit; inspect source/target aura and fuel/time before and after normal ticks. Require actual transfer, correct accounting, and an unfueled or blocked negative. | A no-fuel/blocked case must not pass the positive transfer assertion. |
+| `aura-core-pump-flow` | Player uses a held White crystal directly on the pump, then drops real coal for fuel; inspect pump/target aura, fuel/time and earned transfer over normal ticks. Require correct accounting and an unfueled or blocked negative. Ordinary-node ground absorption is a separate fixture. | A no-fuel/blocked case must not pass the positive transfer assertion. |
 | `aura-black-hole-conservation` | Carry the Black Hole in Survival with identified cobblestone and non-cobblestone stacks; observe intended cobble deletion, unchanged unrelated items, and no duplicate output across slots. | A fixture lacking the Black Hole, or with only unrelated items, must not be reported as positive deletion. |
 | `aura-fairy-pusher-control` | Bind and equip Pusher; compare a controlled hostile's actual velocity/displacement with the ring physically unequipped, while holding distance and target state constant. | The unequipped lane must fail the equipped-effect predicate. |
 | `aura-storage-reload` | Deposit component-distinct items through real player actions, save and close normally, reopen the same disposable save, then retrieve/count exact stacks and power. This extends, rather than erases, earlier bounded storage round trips. | Deliberately mismatched item component/count in an observer fixture must fail. |
@@ -76,21 +77,18 @@ runner; the runnable supported example is
   "fixture": "aura-pump-empty",
   "runtime": {"kind": "packaged-client", "artifact": "aura-candidate"},
   "limits": {"wall_seconds": 600, "max_steps": 64},
-  "setup": {"profile": "prepared-circuit", "disclosure": "drop markers, geometry and raw inputs supplied; no aura, fuel or transfer seeded"},
+  "setup": {"profile": "prepared-pump-circuit", "disclosure": "pump, target node, geometry and raw inputs supplied; no aura, fuel or transfer seeded"},
   "steps": [
-    {"id": "before", "observe": ["aura:node:source", "aura:node:target", "player:inventory", "ground_items"]},
-    {"id": "source-position", "require": {"type": "at_fixture_marker", "marker": "source-drop"}},
-    {"id": "aim-source", "action": {"type": "aim_at_block", "marker": "source-node"}},
-    {"id": "select-crystal", "action": {"type": "select_hotbar", "slot": 0, "item": "aura:aura_crystal_white"}},
-    {"id": "drop-crystal", "action": {"type": "drop_selected", "count": 1}},
-    {"id": "charge", "wait": {"type": "predicate", "max_ticks": 80}, "require": {"type": "ground_absorption", "item": "aura:aura_crystal_white", "source": "source-node"}},
-    {"id": "move-to-pump", "action": {"type": "move_to_fixture_marker", "marker": "pump-drop", "max_ticks": 60}},
+    {"id": "before", "observe": ["aura:pump", "aura:node:target", "player:inventory", "ground_items"]},
     {"id": "aim-pump", "action": {"type": "aim_at_block", "marker": "pump"}},
+    {"id": "select-crystal", "action": {"type": "select_hotbar", "slot": 0, "item": "aura:aura_crystal_white"}},
+    {"id": "use-crystal", "action": {"type": "use_item_at_block", "marker": "pump"}},
+    {"id": "charge", "wait": {"type": "predicate", "max_ticks": 80}, "require": {"type": "pump_crystal_acceptance", "item": "aura:aura_crystal_white", "pump": "pump"}},
     {"id": "select-fuel", "action": {"type": "select_hotbar", "slot": 1, "item": "minecraft:coal"}},
     {"id": "drop-fuel", "action": {"type": "drop_selected", "count": 1}},
     {"id": "fuel", "wait": {"type": "predicate", "max_ticks": 80}, "require": {"type": "pump_fuel_acceptance", "item": "minecraft:coal", "pump": "pump"}},
     {"id": "flow", "wait": {"type": "ticks", "count": 80}, "require": {"type": "numeric_delta", "path": "aura:node:target.white", "gt": 0}},
-    {"id": "after", "observe": ["aura:node:source", "aura:node:target", "screen", "frame"]}
+    {"id": "after", "observe": ["aura:pump", "aura:node:target", "screen", "frame"]}
   ],
   "cleanup": "save-exit"
 }
@@ -99,13 +97,16 @@ runner; the runnable supported example is
 The symbolic `path`, marker, `ground_absorption`, and
 `pump_fuel_acceptance` above resolve through registered, typed fixture/Aura
 observers; they are not arbitrary object traversals or NBT queries.
-`ground_absorption` requires the selected crystal stack to decrease by one,
-its dropped entity to disappear through the normal interaction, and source
-aura to increase. Merely dropping an item or observing inventory loss is
-insufficient. Fuel acceptance likewise requires the coal entity to be
-consumed and pump fuel/time to increase; later target gain comes from normal
-ticks. The fixture declares exact drop-marker and node/pump positions so
-movement and aim are verified. Fixture profiles and observers are maintained
+`pump_crystal_acceptance` requires the held crystal to be used on the targeted
+pump and pump aura to increase, not just a use acknowledgement. The separate
+ordinary-node ground-absorption fixture requires a dropped crystal entity to
+disappear through normal interaction and node aura to increase. White aura can
+flow horizontally when a gradient exists; an equal-pair control does not show
+that behavior. Direct use keeps the core pump fixture smaller and has been
+verified independently. Fuel acceptance requires the coal entity to be consumed
+and pump fuel/time to increase; later target gain comes from normal ticks.
+The fixture declares exact pump/drop-marker positions so aim is verified.
+Fixture profiles and observers are maintained
 code/data reviewed with the target mod adapter, not inline privileged
 instructions. A real schema example should use stable IDs/coordinates from
 its disposable fixture and declare every required capability. A fixture may
@@ -229,8 +230,9 @@ but headless execution without rendering cannot accept screenshots or HUD.
 ## Aura coverage boundary
 
 The 16 targeted mechanics and 11 broader suite obligations, including their
-controls and prior-evidence distinctions, are specified only in the linked
-[Aura playtesting plan](https://github.com/tim-osterhus/aura-cascade-unofficial-port/blob/main/docs/specs/aura-playtesting-v2.md).
+controls and prior-evidence distinctions, are specified only in
+`aura-cascade-unofficial-port/docs/specs/aura-playtesting-v2.md` in the sibling
+working tree (publication pending).
 Mod Lab provides the runner, typed evidence, and capability labels; it does not
 silently mark a mod-specific obligation complete. Random outcomes require
 predeclared trials and uncertainty, not a pass inferred from a short quiet run.

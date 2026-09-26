@@ -175,10 +175,15 @@ def _step(identity, step, out, keyframes_left):
     else:
         requirement = step["require"]
         if requirement["type"] == "screen_class":
-            buttons = lab.command(identity, "get_screen_buttons")
-            if not isinstance(buttons, dict):
-                raise lab.LabError("screen observer returned unsupported shape")
-            observed = buttons.get("screen")
+            deadline = time.monotonic() + 2.0
+            while True:
+                buttons = lab.command(identity, "get_screen_buttons")
+                if not isinstance(buttons, dict):
+                    raise lab.LabError("screen observer returned unsupported shape")
+                observed = buttons.get("screen")
+                if observed == requirement["equals"] or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.1)
         else:
             observed = lab.world_check(identity)["world_name"]
         evidence = {"assertion": requirement["type"], "observed": observed}
@@ -187,7 +192,7 @@ def _step(identity, step, out, keyframes_left):
     return evidence, keyframes_left
 
 
-def run(identity_path, scenario_path, artifact_path, out):
+def run(identity_path, scenario_path, artifact_path, out, cancel_event=None):
     out = Path(out)
     if out.exists():
         raise lab.LabError("scenario output already exists; choose a fresh directory")
@@ -196,14 +201,17 @@ def run(identity_path, scenario_path, artifact_path, out):
     identity = contracts.load(identity_path)
     out.mkdir(parents=True)
     runtime = scenario["runtime"]
+    bridge_classification = identity.get("bridge_classification", "unreviewed")
     report = {"schema_version": 2, "created_at": lab.now(), "scenario": scenario["id"],
               "scenario_sha256": lab.sha256(scenario_path), "status": "unsupported",
-              "evidence_kind": "live", "fixture_id": scenario["fixture"],
+              "evidence_kind": "diagnostic_live" if bridge_classification == "private_diagnostic" else "live",
+              "fixture_id": scenario["fixture"],
               "runtime": {"status": "unsupported", "mod_id": runtime["mod_id"],
                           "mod_version": runtime["mod_version"],
                           "artifact_sha256": runtime["artifact_sha256"],
                           "bridge_sha256": str(identity.get("derivative_sha256", "0" * 64)).lower(),
-                          "profile_kind": "prepared-packaged-client"},
+                          "profile_kind": "prepared-packaged-client",
+                          "bridge_classification": bridge_classification},
               "steps": [{"id": item["id"], "kind": _kind(item), "status": "not_run", "at": lab.now()}
                         for item in scenario["steps"]],
               "cleanup": {"status": "not_run"}, "visual_check": "not_reviewed",
@@ -236,6 +244,8 @@ def run(identity_path, scenario_path, artifact_path, out):
             raise lab.LabError("normal save-exit lifecycle is unavailable")
         lease = ControlLease(identity)
         for index, item in enumerate(scenario["steps"]):
+            if cancel_event is not None and cancel_event.is_set():
+                raise lab.LabError("runtime memory guard or cancellation triggered", "fail")
             if time.monotonic() - started > scenario.get("limits", {}).get("wall_seconds", 600):
                 raise lab.LabError("scenario wall-time limit exceeded", "fail")
             used = lab.group_mb(identity)

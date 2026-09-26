@@ -9,11 +9,11 @@
     "scenario": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
     "scenario_sha256": {"$ref": "#/$defs/hash"},
     "status": {"$ref": "#/$defs/status"},
-    "evidence_kind": {"enum": ["live", "offline_control"]},
+    "evidence_kind": {"enum": ["live", "diagnostic_live", "offline_control"]},
     "fixture_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
     "runtime": {
       "type": "object", "additionalProperties": false,
-      "required": ["status", "mod_id", "mod_version", "artifact_sha256", "bridge_sha256", "profile_kind"],
+      "required": ["status", "mod_id", "mod_version", "artifact_sha256", "bridge_sha256", "profile_kind", "bridge_classification"],
       "properties": {
         "status": {"enum": ["verified", "unsupported"]},
         "mod_id": {"type": "string"},
@@ -21,6 +21,7 @@
         "artifact_sha256": {"$ref": "#/$defs/hash"},
         "bridge_sha256": {"$ref": "#/$defs/hash"},
         "profile_kind": {"const": "prepared-packaged-client"},
+        "bridge_classification": {"enum": ["private_diagnostic", "public_reviewed", "unreviewed"]},
         "reason": {"type": "string", "maxLength": 240}
       }
     },

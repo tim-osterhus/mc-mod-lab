@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "java_exe": "ABSOLUTE_JAVA_21_PATH",
+  "launcher_args": "ABSOLUTE_PRIVATE_ARGFILE_PATH",
+  "launcher_args_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "seed_save": "ABSOLUTE_CLOSED_SEED_SAVE_PATH",
+  "fixture_id": "guide-baseline",
+  "world_name": "LabFixture",
+  "expected_gamemode": "creative",
+  "bridge_classification": "public_reviewed",
+  "mods": [
+    {"role": "target", "path": "ABSOLUTE_TARGET_JAR_PATH", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "mod_id": "aura", "mod_version": "0.2.1+1.21.1"},
+    {"role": "bridge", "path": "ABSOLUTE_REVIEWED_BRIDGE_JAR_PATH", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "mod_id": "mcpmod", "mod_version": "0.3.0"}
+  ]
+}

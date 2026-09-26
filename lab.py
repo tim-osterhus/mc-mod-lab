@@ -710,6 +710,12 @@ def main(argv=None):
     scenario.add_argument("--scenario", type=Path, required=True)
     scenario.add_argument("--artifact", type=Path, required=True)
     scenario.add_argument("--out", type=Path, required=True)
+    runtime = commands.add_parser("runtime", help="prepare an isolated packaged-client profile")
+    runtime.add_argument("operation", choices=["prepare", "launch"])
+    runtime.add_argument("--manifest", type=Path, required=True)
+    runtime.add_argument("--out", type=Path)
+    runtime.add_argument("--profile", type=Path)
+    runtime.add_argument("--scenario", type=Path)
     validate = commands.add_parser("validate", help="validate evidence contracts and artifact hashes")
     validate.add_argument("kind", choices=["parity", "report", "scenario-v2", "scenario-report-v2"])
     validate.add_argument("path", type=Path)
@@ -744,6 +750,27 @@ def main(argv=None):
             return 0 if result["status"] == "pass" else 2
         except (LabError, OSError, ValueError, KeyError, TypeError) as exc:
             reason = str(exc) if isinstance(exc, LabError) else "scenario input or output is unavailable"
+            print(json.dumps({"status": "unsupported", "reason": reason}))
+            return 2
+    if args.command == "runtime":
+        from runtime_profile import prepare
+        try:
+            if args.operation == "prepare":
+                if args.out is None or args.profile is not None or args.scenario is not None:
+                    raise LabError("runtime prepare requires only --manifest and --out")
+                result = prepare(args.manifest, args.out)
+                print(json.dumps({"status": result["status"], "fixture_id": result["fixture_id"],
+                                  "mods": len(result["mods"])}))
+                return 0
+            if args.profile is None or args.scenario is None or args.out is not None:
+                raise LabError("runtime launch requires --manifest, --profile and --scenario")
+            from runtime_launch import launch
+            result = launch(args.manifest, args.profile, args.scenario)
+            print(json.dumps({"status": result["status"], "scenario_status": result["scenario_status"],
+                              "cleanup": result["cleanup"]["status"]}))
+            return 0 if result["status"] == "pass" else 2
+        except (LabError, OSError, ValueError, KeyError, TypeError) as exc:
+            reason = str(exc) if isinstance(exc, LabError) else "runtime profile input is unavailable"
             print(json.dumps({"status": "unsupported", "reason": reason}))
             return 2
     if args.command == "fixture":

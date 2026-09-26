@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "java_exe", "launcher_args", "launcher_args_sha256", "seed_save", "fixture_id", "world_name", "expected_gamemode", "bridge_classification", "mods"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "java_exe": {"type": "string", "minLength": 1},
+    "launcher_args": {"type": "string", "minLength": 1},
+    "launcher_args_sha256": {"$ref": "#/$defs/hash"},
+    "seed_save": {"type": "string", "minLength": 1},
+    "fixture_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "world_name": {"type": "string", "minLength": 1, "maxLength": 160},
+    "expected_gamemode": {"enum": ["creative", "survival", "adventure", "spectator"]},
+    "bridge_classification": {"enum": ["private_diagnostic", "public_reviewed"]},
+    "mods": {
+      "type": "array", "minItems": 2, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "path", "sha256", "mod_id", "mod_version"],
+        "properties": {
+          "role": {"enum": ["target", "bridge", "dependency"]},
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"$ref": "#/$defs/hash"},
+          "mod_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$"},
+          "mod_version": {"type": "string", "minLength": 1, "maxLength": 64}
+        }
+      }
+    }
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

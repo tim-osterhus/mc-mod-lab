@@ -1,9 +1,20 @@
 # Bounded scenario v2 (partial implementation)
 
-`scenario run` currently tests a prepared, isolated, already-running Windows
-Fabric 1.21.1 packaged client. It does **not** launch or save/exit Minecraft,
-and it does not yet run the five Aura proof cases in the design spec. The
-private diagnostic bridge used in Aura QA is not a public Mod Lab backend.
+`scenario run` tests a prepared, isolated, already-running Windows Fabric
+1.21.1 packaged client. `runtime prepare` and `runtime launch` add an opt-in
+owned packaged-client lifecycle, including normal save/exit and a continuously
+sampled memory guard. The five Aura proof cases in the design spec remain
+unimplemented. The private diagnostic bridge used in Aura QA is not a public
+Mod Lab backend.
+
+The runtime manifest and Java argument template are **trusted, reviewed local
+executable inputs**. Matching SHA-256 hashes proves bytes did not change; it
+does not sandbox Java, prove every classpath JAR is safe, or verify the full
+classloader. The launcher requires a single Fabric KnotClient main class,
+packaged absolute JAR classpath with Fabric Loader, and rejects common dev
+output paths and remapping flags. Review the entire template and all classpath
+JARs before marking a profile public. The exact target JAR is separately
+copied to the fresh profile and checked against scenario, metadata, and log.
 
 The runner shares the alpha's marked disposable world, exact process/game
 directory check, authenticated loopback and 3,800 MiB working-set guard.

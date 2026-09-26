@@ -42,6 +42,9 @@ def check_release():
     for scenario in ("examples/scenario.json", "examples/inventory-scenario.json", "examples/vanilla-book/scenario.json"):
         lab.validate_scenario(contracts.load(ROOT / scenario))
     contracts.validate_file(ROOT / "examples/scenario-v2.json", "scenario-v2", portable=True)
+    runtime_example = contracts.load(ROOT / "examples/runtime-profile.example.json")
+    contracts.schema_check(runtime_example, "runtime-profile")
+    contracts.portable_check(runtime_example)
     contracts.validate_file(ROOT / "examples/parity.json", "parity", portable=True)
     from jsonschema import Draft202012Validator
     for schema in (ROOT / "schemas").glob("*.json"):

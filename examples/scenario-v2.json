@@ -4,7 +4,7 @@
   "fixture": "guide-baseline",
   "runtime": {
     "kind": "prepared-packaged-client",
-    "mod_id": "auracascade",
+    "mod_id": "aura",
     "mod_version": "0.2.1+1.21.1",
     "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
