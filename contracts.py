@@ -136,7 +136,49 @@ def validate_parity(value, root, portable=False):
             "dimensions": {name: value[name]["status"] for name in ("deterministic_test", "client_check", "visual_check")}}
 
 
+def validate_scenario_v2(value):
+    from scenario_v2 import validate_scenario
+    validate_scenario(value)
+    return {"status": "valid", "scenario": value["id"], "steps": len(value["steps"])}
+
+
+def validate_scenario_report_v2(value, root, portable=False):
+    schema_check(value, "scenario-report-v2")
+    if portable:
+        portable_check(value)
+    artifacts = value["artifacts"]
+    names = [item["file"] for item in artifacts]
+    if len(names) != len(set(names)):
+        raise ContractError("duplicate scenario artifact")
+    for artifact in artifacts:
+        artifact_path(root, artifact)
+    for step in value["steps"]:
+        shot = step.get("evidence", {}).get("screenshot")
+        if shot:
+            if shot not in names:
+                raise ContractError("scenario screenshot missing from artifact inventory")
+            png = artifact_path(root, artifacts[names.index(shot)]).read_bytes()
+            if len(png) < 24 or png[:8] != b"\x89PNG\r\n\x1a\n":
+                raise ContractError("scenario screenshot is not PNG")
+    if value["status"] == "pass":
+        if (value["runtime"]["status"] != "verified" or value["cleanup"]["status"] != "pass"
+                or not value["steps"] or any(step["status"] != "pass" for step in value["steps"])
+                or not any(step["kind"] == "require" for step in value["steps"])):
+            raise ContractError("scenario pass lacks verified runtime, assertions, steps, or cleanup")
+    if any(step["status"] == "not_run" for step in value["steps"]):
+        if value["status"] == "pass":
+            raise ContractError("scenario pass contains a skipped step")
+    return {"status": "valid", "scenario_status": value["status"],
+            "evidence_kind": value["evidence_kind"], "visual_check": value["visual_check"]}
+
+
 def validate_file(path, kind, portable=False):
     value = load(path)
     root = Path(path).parent
-    return (validate_report if kind == "report" else validate_parity)(value, root, portable)
+    if kind == "scenario-v2":
+        return validate_scenario_v2(value)
+    validators = {"report": validate_report, "parity": validate_parity,
+                  "scenario-report-v2": validate_scenario_report_v2}
+    if kind not in validators:
+        raise ContractError("unknown evidence contract")
+    return validators[kind](value, root, portable)

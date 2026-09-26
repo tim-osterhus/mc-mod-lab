@@ -290,6 +290,45 @@ def process_mb(pid):
     raise LabError("memory tracking is unsupported on this platform")
 
 
+def process_private_mb(pid):
+    if platform.system() == "Windows":
+        kernel = ctypes.windll.kernel32
+        psapi = ctypes.windll.psapi
+
+        class CountersEx(ctypes.Structure):
+            _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong),
+                        ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+                        ("PrivateUsage", ctypes.c_size_t)]
+
+        kernel.OpenProcess.restype = ctypes.c_void_p
+        kernel.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
+        handle = kernel.OpenProcess(0x1000 | 0x0010, False, pid)
+        if not handle:
+            raise LabError("tracked process is unavailable")
+        try:
+            counters = CountersEx()
+            counters.cb = ctypes.sizeof(CountersEx)
+            if not psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+                raise LabError("cannot read tracked process private memory")
+            return counters.PrivateUsage / 1048576
+        finally:
+            kernel.CloseHandle(ctypes.c_void_p(handle))
+    if platform.system() == "Linux":
+        try:
+            lines = Path(f"/proc/{pid}/smaps_rollup").read_text().splitlines()
+            total_kib = sum(int(line.split()[1]) for line in lines
+                            if line.startswith(("Private_Clean:", "Private_Dirty:", "Private_Hugetlb:")))
+            return total_kib / 1024
+        except (OSError, ValueError, IndexError) as exc:
+            raise LabError("tracked process private memory is unavailable") from exc
+    raise LabError("private memory tracking is unsupported on this platform")
+
+
 def group_mb(identity):
     used = sum(process_mb(pid) for pid in set(identity["tracked_pids"]))
     if used > identity["max_group_mb"]:
@@ -627,8 +666,14 @@ def main(argv=None):
     run.add_argument("--identity", type=Path, required=True)
     run.add_argument("--scenario", type=Path, required=True)
     run.add_argument("--out", type=Path, required=True)
+    scenario = commands.add_parser("scenario", help="run a bounded v2 scenario on a prepared packaged client")
+    scenario.add_argument("run", choices=["run"])
+    scenario.add_argument("--identity", type=Path, required=True)
+    scenario.add_argument("--scenario", type=Path, required=True)
+    scenario.add_argument("--artifact", type=Path, required=True)
+    scenario.add_argument("--out", type=Path, required=True)
     validate = commands.add_parser("validate", help="validate evidence contracts and artifact hashes")
-    validate.add_argument("kind", choices=["parity", "report"])
+    validate.add_argument("kind", choices=["parity", "report", "scenario-v2", "scenario-report-v2"])
     validate.add_argument("path", type=Path)
     validate.add_argument("--portable", action="store_true")
     replay = commands.add_parser("replay", help="run the synthetic failing/corrected example without Minecraft")
@@ -652,6 +697,16 @@ def main(argv=None):
             return 0
         except (LabError, OSError, ValueError):
             print(json.dumps({"status": "unsupported", "reason": "replay requires a fresh writable output directory"}))
+            return 2
+    if args.command == "scenario":
+        from scenario_v2 import run as run_scenario
+        try:
+            result = run_scenario(args.identity, args.scenario, args.artifact, args.out)
+            print(json.dumps({"status": result["status"], "reason": result.get("reason")}))
+            return 0 if result["status"] == "pass" else 2
+        except (LabError, OSError, ValueError, KeyError, TypeError) as exc:
+            reason = str(exc) if isinstance(exc, LabError) else "scenario input or output is unavailable"
+            print(json.dumps({"status": "unsupported", "reason": reason}))
             return 2
     if args.command == "fixture":
         try:

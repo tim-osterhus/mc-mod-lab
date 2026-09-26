@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "created_at", "scenario", "scenario_sha256", "status", "evidence_kind", "fixture_id", "runtime", "steps", "cleanup", "visual_check", "artifacts", "memory"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "created_at": {"type": "string", "format": "date-time"},
+    "scenario": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "scenario_sha256": {"$ref": "#/$defs/hash"},
+    "status": {"$ref": "#/$defs/status"},
+    "evidence_kind": {"enum": ["live", "offline_control"]},
+    "fixture_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "mod_id", "mod_version", "artifact_sha256", "bridge_sha256", "profile_kind"],
+      "properties": {
+        "status": {"enum": ["verified", "unsupported"]},
+        "mod_id": {"type": "string"},
+        "mod_version": {"type": "string"},
+        "artifact_sha256": {"$ref": "#/$defs/hash"},
+        "bridge_sha256": {"$ref": "#/$defs/hash"},
+        "profile_kind": {"const": "prepared-packaged-client"},
+        "reason": {"type": "string", "maxLength": 240}
+      }
+    },
+    "steps": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/step"}},
+    "cleanup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status"],
+      "properties": {"status": {"$ref": "#/$defs/status"}, "reason": {"type": "string", "maxLength": 240}}
+    },
+    "visual_check": {"enum": ["not_reviewed", "pass", "fail", "inconclusive"]},
+    "visual_reviewer": {"type": "string", "minLength": 1, "maxLength": 100},
+    "artifacts": {
+      "type": "array", "maxItems": 64,
+      "items": {"type": "object", "additionalProperties": false, "required": ["file", "sha256"],
+        "properties": {"file": {"type": "string", "minLength": 1, "maxLength": 180}, "sha256": {"$ref": "#/$defs/hash"}}}
+    },
+    "memory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["working_set_limit_mib", "peak_working_set_mib", "peak_private_mib", "samples", "hard_cap"],
+      "properties": {
+        "working_set_limit_mib": {"type": "number", "exclusiveMinimum": 0, "maximum": 3800},
+        "peak_working_set_mib": {"type": ["number", "null"], "minimum": 0},
+        "peak_private_mib": {"type": ["number", "null"], "minimum": 0},
+        "samples": {"type": "integer", "minimum": 0},
+        "hard_cap": {"const": false}
+      }
+    },
+    "reason": {"type": "string", "maxLength": 240}
+  },
+  "allOf": [
+    {"if": {"properties": {"visual_check": {"enum": ["pass", "fail"]}}},
+     "then": {"required": ["visual_reviewer"]}}
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["pass", "fail", "inconclusive", "unsupported", "not_run"]},
+    "step": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "status", "at"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+        "kind": {"enum": ["observe", "action", "wait", "require"]},
+        "status": {"$ref": "#/$defs/status"},
+        "at": {"type": "string", "format": "date-time"},
+        "reason": {"type": "string", "maxLength": 240},
+        "evidence": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "world_name": {"type": "string", "maxLength": 160},
+            "screen_class": {"type": ["string", "null"], "maxLength": 160},
+            "screenshot": {"type": "string", "maxLength": 180},
+            "player_gamemode": {"enum": ["creative", "survival", "adventure", "spectator"]},
+            "player_dimension": {"type": "string", "maxLength": 160},
+            "action_type": {"type": "string", "maxLength": 80},
+            "acknowledged": {"type": "boolean"},
+            "assertion": {"type": "string", "maxLength": 80},
+            "observed": {"type": ["string", "number", "boolean", "null"], "maxLength": 160}
+          }
+        }
+      }
+    }
+  }
+}

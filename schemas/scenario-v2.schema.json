@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "fixture", "runtime", "steps", "cleanup"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "fixture": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "mod_id", "mod_version", "artifact_sha256"],
+      "properties": {
+        "kind": {"const": "prepared-packaged-client"},
+        "mod_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$"},
+        "mod_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "wall_seconds": {"type": "integer", "minimum": 1, "maximum": 600},
+        "max_steps": {"type": "integer", "minimum": 1, "maximum": 64},
+        "max_keyframes": {"type": "integer", "minimum": 0, "maximum": 64}
+      }
+    },
+    "steps": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": {"$ref": "#/$defs/step"}
+    },
+    "cleanup": {"enum": ["release-control", "save-exit"]}
+  },
+  "$defs": {
+    "step": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+        "observe": {
+          "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true,
+          "items": {"enum": ["world", "player", "screen", "frame", "inventory", "nearby_entities", "aura_node", "aura_pump", "storage", "hud_render"]}
+        },
+        "action": {"$ref": "#/$defs/action"},
+        "wait": {"$ref": "#/$defs/wait"},
+        "require": {"$ref": "#/$defs/require"}
+      },
+      "oneOf": [
+        {"required": ["observe"]},
+        {"required": ["action"]},
+        {"required": ["wait"]},
+        {"required": ["require"]}
+      ]
+    },
+    "action": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "key"], "properties": {"type": {"const": "press_key"}, "key": {"enum": ["Enter", "Escape", "E", "Tab"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "x", "y"], "properties": {"type": {"const": "click"}, "x": {"type": "integer", "minimum": 0, "maximum": 8191}, "y": {"type": "integer", "minimum": 0, "maximum": 8191}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "index"], "properties": {"type": {"const": "click_button_index"}, "index": {"type": "integer", "minimum": 0, "maximum": 20}}},
+        {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {"type": {"const": "use_item"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "slot", "item"], "properties": {"type": {"const": "select_hotbar"}, "slot": {"type": "integer", "minimum": 0, "maximum": 8}, "item": {"$ref": "#/$defs/registry_id"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "count"], "properties": {"type": {"const": "drop_selected"}, "count": {"type": "integer", "minimum": 1, "maximum": 64}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "marker"], "properties": {"type": {"const": "aim_at_block"}, "marker": {"$ref": "#/$defs/marker"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "marker", "max_ticks"], "properties": {"type": {"const": "move_to_fixture_marker"}, "marker": {"$ref": "#/$defs/marker"}, "max_ticks": {"type": "integer", "minimum": 1, "maximum": 1200}}},
+        {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {"type": {"const": "attack"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {"type": {"const": "interact"}}}
+      ]
+    },
+    "wait": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "count"], "properties": {"type": {"const": "ticks"}, "count": {"type": "integer", "minimum": 1, "maximum": 1200}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "event", "max_ticks"], "properties": {"type": {"const": "event"}, "event": {"enum": ["item_absorbed", "pump_fueled", "aura_transfer", "fairy_impulse", "storage_saved"]}, "max_ticks": {"type": "integer", "minimum": 1, "maximum": 1200}}}
+      ]
+    },
+    "require": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "equals"], "properties": {"type": {"const": "screen_class"}, "equals": {"type": "string", "minLength": 1, "maxLength": 160}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "equals"], "properties": {"type": {"const": "world_name"}, "equals": {"type": "string", "minLength": 1, "maxLength": 160}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "source", "target", "color"], "properties": {"type": {"const": "aura_transfer"}, "source": {"$ref": "#/$defs/marker"}, "target": {"$ref": "#/$defs/marker"}, "color": {"enum": ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "item"], "properties": {"type": {"const": "inventory_conservation"}, "item": {"$ref": "#/$defs/registry_id"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "entity"], "properties": {"type": {"const": "entity_displacement"}, "entity": {"$ref": "#/$defs/marker"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "marker"], "properties": {"type": {"const": "storage_retrieval"}, "marker": {"$ref": "#/$defs/marker"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "seconds"], "properties": {"type": {"const": "hud_continuity"}, "seconds": {"type": "integer", "minimum": 10, "maximum": 60}}}
+      ]
+    },
+    "registry_id": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$", "maxLength": 160},
+    "marker": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "id": "inventory-open-packaged",
+  "fixture": "guide-baseline",
+  "runtime": {
+    "kind": "prepared-packaged-client",
+    "mod_id": "auracascade",
+    "mod_version": "0.2.1+1.21.1",
+    "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "limits": {"wall_seconds": 120, "max_steps": 4, "max_keyframes": 1},
+  "steps": [
+    {"id": "before", "observe": ["world", "player", "screen"]},
+    {"id": "open", "action": {"type": "press_key", "key": "E"}},
+    {"id": "inventory", "require": {"type": "screen_class", "equals": "InventoryScreen"}},
+    {"id": "after", "observe": ["screen", "frame"]}
+  ],
+  "cleanup": "release-control"
+}

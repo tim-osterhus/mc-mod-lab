@@ -1,6 +1,6 @@
 # Minecraft Mod Lab
 
-Minecraft Mod Lab is a thin, local verification toolkit for evidence-backed Minecraft mod development. This alpha supports a disposable save copy, environment doctor, and one bounded before/action/after capture workflow. It does not launch Minecraft, install mods, edit a target mod, or decide visual parity.
+Minecraft Mod Lab is a thin, local verification toolkit for evidence-backed Minecraft mod development. The alpha supports a disposable save copy, environment doctor, and one bounded before/action/after capture workflow. An experimental [scenario v2 runner](docs/scenario-v2.md) adds strict multi-step contracts and exact prepared-packaged-JAR checks for the bridge's existing GUI observations/actions. It does not launch Minecraft, install mods, edit a target mod, or decide visual parity.
 
 Start with [setup and rebuild instructions](docs/setup.md), or run the
 [portable offline example](docs/evidence.md) before preparing a client.
@@ -29,10 +29,12 @@ Python 3.10+ with the standard library is enough:
 python lab.py fixture create --seed PATH_TO_CLOSED_SEED_SAVE --root PATH_TO_DISPOSABLE_ROOT --id guide-baseline --world-name LabFixture
 python lab.py doctor --identity identity.json
 python lab.py capture --identity identity.json --scenario examples/inventory-scenario.json --out reports/inventory
+python lab.py validate scenario-v2 examples/scenario-v2.json
 python -m unittest discover -s tests -v
 ```
 
-Live commands use the standard library. Evidence validation and the full test
+Live commands use the standard library except v2 schema validation, which
+uses the pinned `jsonschema` dependency. Evidence validation and the full test
 suite also require `python -m pip install -r requirements.txt` in a local virtual
 environment. See [portable replay and evidence validation](docs/evidence.md) for
 the offline failing/corrected example, and the [completion ledger](docs/completion.md)

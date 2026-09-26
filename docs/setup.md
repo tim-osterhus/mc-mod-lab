@@ -60,8 +60,11 @@ headers. Stock npm MCP transport cannot authenticate to this derivative.
 
 ## Live handshake and reset
 
-Coordinate one runtime slot for build/client workloads. Prepare a closed seed,
-then follow `docs/vanilla-fixture.md` to create a new disposable copy. Copy the
+Use an isolated profile, save, port, token, and process group for each workload;
+independent isolated workloads may run concurrently. Keep each workload under
+its own 4.5 GB Minecraft/build/helper budget, excluding the Codex desktop app.
+Prepare a closed seed, then follow `docs/vanilla-fixture.md` to create a new
+disposable copy. Copy the
 identity template to ignored `identity.json`; replace every placeholder and
 record the actual selected Java PID, port, mode, internal world name, canonical
 save path, game directory, fresh log, original/derivative hashes, and tool PIDs.
@@ -88,8 +91,8 @@ widget diagnostics separately from visual findings.
 
 The memory guard samples the declared Minecraft/tool PID group with a 3800 MiB
 working-set ceiling. Other desktop apps are optional informational telemetry.
-Sampling cannot guarantee a continuous hard peak; measure private allocation
-separately when evaluating the workload. Close the client normally after testing.
+Sampling cannot guarantee a continuous hard peak; v2 also samples private
+allocation at each scenario step. Close the client normally after testing.
 
 ## Package and isolated installation smoke
 

@@ -24,6 +24,12 @@ with the plugin's `requirements.txt` when validating evidence.
    This tests a failing/corrected synthetic example without Minecraft. It is not
    live evidence. Follow `docs/vanilla-fixture.md` for a second real fixture.
 
+For an independently prepared packaged instance, read `docs/scenario-v2.md`
+before using `lab.py scenario run`. Its current multi-step GUI support does not
+provide Aura mechanic observers, tick waits, launch/reopen, or automated visual
+approval. A private diagnostic bridge is not a supported public backend.
+Unsupported steps must remain unsupported in the report.
+
 Keep source collection portable: public URLs/timestamps or a named local evidence
 bundle, never copied private user paths or downloaded videos. Implement one
 feature slice in the target mod only when separately authorized, and preserve
