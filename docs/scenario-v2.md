@@ -7,6 +7,8 @@ private diagnostic bridge used in Aura QA is not a public Mod Lab backend.
 
 The runner shares the alpha's marked disposable world, exact process/game
 directory check, authenticated loopback and 3,800 MiB working-set guard.
+`fixture create` holds a nonblocking source `session.lock` when present and
+omits that lock from the new world copy; a held lock refuses the copy.
 It additionally verifies an exact artifact hash, `fabric.mod.json` ID/version,
 unique matching JAR in that profile's `mods` directory and matching fresh
 Fabric launch-log entry. These checks are strong identity evidence, but the

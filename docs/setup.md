@@ -84,7 +84,8 @@ prepare a consistent fixture; do not relabel either observed value. The guide
 has a tested empty-hand failure and written-book correction procedure.
 
 Reset always means another `fixture create` from the closed seed; no in-place
-reset/delete command exists. Keep captures in new output directories. Screenshot
+reset/delete command exists. The copier omits `session.lock` and refuses a
+seed whose lock is held. Keep captures in new output directories. Screenshot
 dimensions and hashes are automatic checks; a separate reviewer must inspect
 content, clipping, readable text, and visible controls. Report blank/duplicate
 widget diagnostics separately from visual findings.

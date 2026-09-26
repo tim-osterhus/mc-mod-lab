@@ -5,6 +5,7 @@ import argparse
 import base64
 import binascii
 import ctypes
+from contextlib import contextmanager
 import hashlib
 import json
 import ntpath
@@ -645,10 +646,47 @@ def fixture_create(seed, root, fixture_id, world_name):
             raise LabError("seed contains symlinks")
     root.mkdir(parents=True, exist_ok=True)
     destination = root / f"{fixture_id}-{uuid4().hex[:8]}"
-    shutil.copytree(seed, destination)
+    with closed_seed_lock(seed):
+        shutil.copytree(seed, destination,
+                        ignore=lambda directory, names: {"session.lock"}
+                        if Path(directory).resolve() == seed.resolve() and "session.lock" in names else set())
     write_json(destination / MARKER, {"schema_version": 1, "fixture_id": fixture_id,
                                      "world_name": world_name, "created_at": now()})
     return destination
+
+
+@contextmanager
+def closed_seed_lock(seed):
+    lock = seed / "session.lock"
+    if not lock.exists():
+        yield
+        return
+    try:
+        fd = os.open(lock, os.O_RDWR)
+    except OSError as exc:
+        raise LabError("seed session lock is unavailable; close the source world") from exc
+    held = False
+    try:
+        try:
+            if platform.system() == "Windows":
+                import msvcrt
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            elif platform.system() == "Linux":
+                import fcntl
+                fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1)
+            else:
+                raise LabError("source world lock check is unsupported on this platform")
+        except (OSError, BlockingIOError) as exc:
+            raise LabError("seed session lock is held; close the source world") from exc
+        held = True
+        yield
+    finally:
+        if held:
+            if platform.system() == "Windows":
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.lockf(fd, fcntl.LOCK_UN, 1)
+        os.close(fd)
 
 
 def main(argv=None):

@@ -1,6 +1,8 @@
 import base64
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -95,6 +97,37 @@ class LabTests(unittest.TestCase):
         self.assertNotEqual(second, self.world)
         self.assertEqual((second / "level.dat").read_bytes(), b"seed")
         self.assertFalse((self.seed / lab.MARKER).exists())
+
+    def test_fixture_omits_session_lock(self):
+        lock = self.seed / "session.lock"
+        lock.write_bytes(b"12345678")
+        second = lab.fixture_create(self.seed, self.root / "fixtures", "locked-seed", "LabFixture")
+        self.assertEqual(lock.read_bytes(), b"12345678")
+        self.assertFalse((second / "session.lock").exists())
+        self.assertTrue((second / "level.dat").exists())
+
+    def test_fixture_rejects_seed_locked_by_another_process(self):
+        lock = self.seed / "session.lock"
+        lock.write_bytes(b"12345678")
+        script = (
+            "import os,sys; fd=os.open(sys.argv[1],os.O_RDWR); "
+            "import platform; "
+            "exec('import msvcrt; msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)' "
+            "if platform.system()=='Windows' else "
+            "'import fcntl; fcntl.lockf(fd, fcntl.LOCK_EX|fcntl.LOCK_NB, 1)'); "
+            "print('ready',flush=True); sys.stdin.read(1)"
+        )
+        child = subprocess.Popen([sys.executable, "-c", script, str(lock)],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            with self.assertRaisesRegex(lab.LabError, "seed session lock"):
+                lab.fixture_create(self.seed, self.root / "fixtures", "held-seed", "LabFixture")
+        finally:
+            child.stdin.write("x")
+            child.stdin.flush()
+            child.communicate(timeout=5)
 
     def test_fixture_rejects_recursive_copy_and_symlink(self):
         with self.assertRaises(lab.LabError):
