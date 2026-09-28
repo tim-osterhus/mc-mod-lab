@@ -1,0 +1,133 @@
+{
+  "cleanup": "release-control",
+  "fixture": "black-hole-v1",
+  "id": "black-hole-control",
+  "limits": {
+    "max_keyframes": 1,
+    "max_steps": 32,
+    "wall_seconds": 360
+  },
+  "runtime": {
+    "artifact_sha256": "2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8",
+    "kind": "prepared-packaged-client",
+    "mod_id": "aura",
+    "mod_version": "0.2.1+1.21.1"
+  },
+  "schema_version": 2,
+  "steps": [
+    {
+      "id": "initial",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "precontrol",
+      "wait": {
+        "count": 120,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "before",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "no-early-deletion",
+      "require": {
+        "after": "before",
+        "before": "initial",
+        "expected_after_count": 102,
+        "expected_before_count": 102,
+        "expected_count_delta": 0,
+        "item_id": "minecraft:cobblestone",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "natural-pickup-delay-a",
+      "wait": {
+        "count": 1200,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "natural-pickup-delay-b",
+      "wait": {
+        "count": 1200,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "after",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "conserved-result",
+      "require": {
+        "after": "after",
+        "before": "before",
+        "expected_after_count": 102,
+        "expected_before_count": 102,
+        "expected_count_delta": 0,
+        "item_id": "minecraft:cobblestone",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "later-window",
+      "wait": {
+        "count": 120,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "later",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "no-duplicate-output",
+      "require": {
+        "after": "later",
+        "before": "after",
+        "expected_after_count": 102,
+        "expected_before_count": 102,
+        "expected_count_delta": 0,
+        "item_id": "minecraft:cobblestone",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "frame",
+      "observe": [
+        "frame"
+      ]
+    },
+    {
+      "id": "positive-predicate-rejected",
+      "require": {
+        "after": "after",
+        "before": "before",
+        "expected_after_count": 0,
+        "expected_before_count": 102,
+        "expected_count_delta": -102,
+        "item_id": "minecraft:cobblestone",
+        "type": "inventory_conservation"
+      }
+    }
+  ]
+}

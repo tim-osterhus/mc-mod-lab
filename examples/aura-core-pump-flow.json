@@ -1,0 +1,251 @@
+{
+  "cleanup": "release-control",
+  "fixture": "core-pump-v1",
+  "id": "core-pump-fueled",
+  "limits": {
+    "max_keyframes": 1,
+    "max_steps": 32,
+    "wall_seconds": 300
+  },
+  "runtime": {
+    "artifact_sha256": "2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8",
+    "kind": "prepared-packaged-client",
+    "mod_id": "aura",
+    "mod_version": "0.2.1+1.21.1"
+  },
+  "schema_version": 2,
+  "steps": [
+    {
+      "id": "pump-empty",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "target-empty",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 164,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "inventory-before",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "aim_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "aim"
+    },
+    {
+      "id": "aim-settled",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "item": "aura:aura_crystal_white",
+        "slot": 0,
+        "type": "select_hotbar"
+      },
+      "id": "select-crystal"
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "use-crystal"
+    },
+    {
+      "id": "charge-settled",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "pump-charged",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "crystal-charge",
+      "require": {
+        "after": "pump-charged",
+        "before": "pump-empty",
+        "metric": "total_aura",
+        "minimum_delta": 1000,
+        "type": "aura_increase"
+      }
+    },
+    {
+      "id": "inventory-charged",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "crystal-consumed",
+      "require": {
+        "after": "inventory-charged",
+        "before": "inventory-before",
+        "expected_count_delta": -1,
+        "item_id": "aura:aura_crystal_white",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "pair-before",
+      "observe": [
+        {
+          "target_y": 164,
+          "type": "aura_pump_pair",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "action": {
+        "item": "minecraft:coal",
+        "slot": 1,
+        "type": "select_hotbar"
+      },
+      "id": "select-coal"
+    },
+    {
+      "action": {
+        "count": 1,
+        "type": "drop_selected"
+      },
+      "id": "drop-coal"
+    },
+    {
+      "id": "settle-transfer",
+      "wait": {
+        "count": 240,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "pair-after",
+      "observe": [
+        {
+          "target_y": 164,
+          "type": "aura_pump_pair",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "runtime-window",
+      "wait": {
+        "count": 60,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "pair-end",
+      "observe": [
+        {
+          "target_y": 164,
+          "type": "aura_pump_pair",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "atomic-accounting",
+      "require": {
+        "after": "pair-after",
+        "before": "pair-before",
+        "end": "pair-end",
+        "expected_aura": 1000,
+        "mode": "flow",
+        "type": "pump_accounting"
+      }
+    },
+    {
+      "id": "normal-ticks",
+      "wait": {
+        "count": 60,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "target-after",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 164,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "pump-after",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "frame",
+      "observe": [
+        "frame"
+      ]
+    },
+    {
+      "id": "earned-transfer",
+      "require": {
+        "after": "target-after",
+        "before": "target-empty",
+        "metric": "total_aura",
+        "minimum_delta": 1,
+        "type": "aura_increase"
+      }
+    }
+  ]
+}

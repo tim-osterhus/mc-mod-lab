@@ -137,7 +137,7 @@ class RuntimeLaunchTests(unittest.TestCase):
                 pass
 
         with patch.object(runtime_launch.subprocess, "Popen", side_effect=spawn), \
-             patch.object(runtime_launch, "_choose_port", return_value=port), \
+             patch.object(runtime_launch, "_reserve_port", return_value=(port, tempfile.TemporaryFile())), \
              patch.object(runtime_launch, "_wait_ready", side_effect=ready), \
              patch.object(runtime_launch.scenario_v2, "run", side_effect=run_scenario), \
              patch.object(runtime_launch, "_close_owned",
@@ -267,7 +267,7 @@ class RuntimeLaunchTests(unittest.TestCase):
                 pass
 
         with patch.object(runtime_launch.subprocess, "Popen", return_value=Process()), \
-             patch.object(runtime_launch, "_choose_port", return_value=9875), \
+             patch.object(runtime_launch, "_reserve_port", return_value=(9875, tempfile.TemporaryFile())), \
              patch.object(runtime_launch.threading, "Thread", InlineThread), \
              patch.object(runtime_launch, "_owned_loopback_ports") as listeners, \
              patch.object(runtime_launch, "_close_owned",
@@ -290,6 +290,18 @@ class RuntimeLaunchTests(unittest.TestCase):
         self.assertEqual(second_result["status"], "diagnostic_only")
         self.assertEqual(first["popen_kwargs"]["env"]["MC_MCP_PORT"], "9875")
         self.assertEqual(second_observed["popen_kwargs"]["env"]["MC_MCP_PORT"], "9874")
+
+    @unittest.skipUnless(runtime_launch.platform.system() == "Windows", "Windows port lock")
+    def test_reservations_exclude_starting_clients_without_listeners(self):
+        first, first_lock = runtime_launch._reserve_port()
+        try:
+            second, second_lock = runtime_launch._reserve_port()
+            try:
+                self.assertNotEqual(first, second)
+            finally:
+                second_lock.close()
+        finally:
+            first_lock.close()
 
     def test_choose_port_skips_a_listener_held_by_another_profile(self):
         active_ports = set()

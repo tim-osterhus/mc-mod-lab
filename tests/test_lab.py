@@ -24,6 +24,7 @@ class LabTests(unittest.TestCase):
         self.seed = self.root / "seed"
         self.seed.mkdir()
         (self.seed / "level.dat").write_bytes(b"seed")
+        (self.seed / "session.lock").write_bytes(b"seed lock")
         self.game_dir = self.root / "game"
         self.world = lab.fixture_create(self.seed, self.game_dir / "saves", "guide-baseline", "LabFixture")
         self.launch_log = self.game_dir / "logs" / "latest.log"
@@ -105,6 +106,11 @@ class LabTests(unittest.TestCase):
         self.assertEqual(lock.read_bytes(), b"12345678")
         self.assertFalse((second / "session.lock").exists())
         self.assertTrue((second / "level.dat").exists())
+
+    def test_fixture_refuses_missing_lock(self):
+        (self.seed / "session.lock").unlink()
+        with self.assertRaisesRegex(lab.LabError, "session lock is missing"):
+            lab.fixture_create(self.seed, self.root / "fixtures", "no-lock", "LabFixture")
 
     def test_fixture_rejects_seed_locked_by_another_process(self):
         lock = self.seed / "session.lock"

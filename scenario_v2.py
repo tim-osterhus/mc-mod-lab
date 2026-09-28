@@ -17,9 +17,9 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair"}
 SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block"}
-SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation"}
+SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
 REGISTRY_ID = re.compile(r"^[a-z0-9_.-]+:[a-z0-9_./-]+$")
@@ -37,6 +37,14 @@ def validate_scenario(value):
     observations = {step["id"]: _typed_observations(step) for step in value["steps"]}
     for index, step in enumerate(value["steps"]):
         requirement = step.get("require")
+        if requirement and requirement["type"] == "pump_accounting":
+            refs = [requirement[key] for key in ("before", "after", "end")]
+            if any(ref not in positions for ref in refs) or not positions[refs[0]] < positions[refs[1]] < positions[refs[2]] < index:
+                raise contracts.ContractError("pump accounting observations must precede it in order")
+            specs = [[spec for spec in observations[ref] if spec["type"] == "aura_pump_pair"] for ref in refs]
+            if any(len(items) != 1 for items in specs) or not specs[0] == specs[1] == specs[2]:
+                raise contracts.ContractError("pump accounting requires one identical pair coordinate per observation")
+            continue
         if not requirement or requirement["type"] not in {"aura_increase", "inventory_conservation"}:
             continue
         before_id, after_id = requirement["before"], requirement["after"]
@@ -62,7 +70,8 @@ def _typed_observations(step):
 
 
 def _observation_key(spec):
-    return (spec["type"], spec.get("x"), spec.get("y"), spec.get("z"))
+    result = (spec["type"], spec.get("x"), spec.get("y"), spec.get("z"))
+    return (*result, spec["target_y"]) if spec["type"] == "aura_pump_pair" else result
 
 
 def verify_packaged_artifact(identity, scenario, artifact):
@@ -164,49 +173,53 @@ def scenario_request(identity, kind, name, params):
         raise lab.LabError("MC_MOD_LAB_TOKEN must be a 32+ character per-session secret")
     lab.listening_socket(identity["pid"], identity["port"])
     request = {"schema_version": 2, "kind": kind, "name": name, "params": params}
+    body = json.dumps(request, separators=(",", ":")).encode("utf-8")
     connection = http.client.HTTPConnection("127.0.0.1", identity["port"], timeout=8)
     try:
         connection.request("POST", "/api/scenario/v2",
-                           body=json.dumps(request, separators=(",", ":")).encode("utf-8"),
+                           body=body,
                            headers={"Content-Type": "application/json",
                                     "Authorization": "Bearer " + token})
         response = connection.getresponse()
         raw = response.read(MAX_SCENARIO_RESPONSE_BYTES + 1)
         status_code = response.status
-    except (OSError, http.client.HTTPException, ValueError) as exc:
+        if len(raw) > MAX_SCENARIO_RESPONSE_BYTES:
+            raise lab.LabError("scenario bridge response exceeds the fixed output limit", "unsupported")
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise lab.LabError("scenario bridge response is invalid", "fail") from exc
+        if status_code != 200:
+            if status_code in {503, 504} or (status_code == 422 and isinstance(result, dict)
+                                              and result.get("status") == "unsupported"):
+                raise lab.LabError("scenario bridge capability is unavailable")
+            raise lab.LabError("scenario bridge rejected the typed request", "fail")
+        if not isinstance(result, dict) or result.get("schema_version") != 2:
+            raise lab.LabError("scenario bridge response envelope is invalid", "fail")
+        if result.get("status") == "unsupported":
+            raise lab.LabError("scenario bridge capability is unavailable")
+        if (result.get("status") != "ok" or result.get("kind") != kind
+                or result.get("name") != name or "result" not in result):
+            raise lab.LabError("scenario bridge response does not match the typed request", "fail")
+        for key in ("server_tick_before", "server_tick_after"):
+            if key in result and (isinstance(result[key], bool) or not isinstance(result[key], int)
+                                  or result[key] < 0):
+                raise lab.LabError("scenario bridge returned an invalid server tick", "unsupported")
+        if ("server_tick_before" in result and "server_tick_after" in result
+                and result["server_tick_after"] < result["server_tick_before"]):
+            raise lab.LabError("scenario bridge server tick moved backwards", "unsupported")
+        if kind == "action":
+            _validate_action_ack(result["result"], name)
+        return result
+    except (lab.LabError, OSError, http.client.HTTPException, ValueError) as exc:
+        # Once sending starts, any unvalidated outcome may have changed the save.
         if kind == "action":
             _mark_uncertain(identity)
+        if isinstance(exc, lab.LabError):
+            raise
         raise lab.LabError("scenario bridge request failed", "fail") from exc
     finally:
         connection.close()
-    if len(raw) > MAX_SCENARIO_RESPONSE_BYTES:
-        raise lab.LabError("scenario bridge response exceeds the fixed output limit", "unsupported")
-    try:
-        result = json.loads(raw.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise lab.LabError("scenario bridge response is invalid", "fail") from exc
-    if status_code != 200:
-        if kind == "action" and status_code in {503, 504}:
-            _mark_uncertain(identity)
-        if status_code in {503, 504} or (status_code == 422 and isinstance(result, dict)
-                                          and result.get("status") == "unsupported"):
-            raise lab.LabError("scenario bridge capability is unavailable")
-        raise lab.LabError("scenario bridge rejected the typed request", "fail")
-    if not isinstance(result, dict) or result.get("schema_version") != 2:
-        raise lab.LabError("scenario bridge response envelope is invalid", "fail")
-    if result.get("status") == "unsupported":
-        raise lab.LabError("scenario bridge capability is unavailable")
-    if (result.get("status") != "ok" or result.get("kind") != kind
-            or result.get("name") != name or "result" not in result):
-        raise lab.LabError("scenario bridge response does not match the typed request", "fail")
-    for key in ("server_tick_before", "server_tick_after"):
-        if key in result and (isinstance(result[key], bool) or not isinstance(result[key], int)
-                              or result[key] < 0):
-            raise lab.LabError("scenario bridge returned an invalid server tick", "unsupported")
-    if ("server_tick_before" in result and "server_tick_after" in result
-            and result["server_tick_after"] < result["server_tick_before"]):
-        raise lab.LabError("scenario bridge server tick moved backwards", "unsupported")
-    return result
 
 
 def _mark_uncertain(identity):
@@ -218,12 +231,16 @@ def _mark_uncertain(identity):
 
 def _scenario_observation(identity, spec):
     name = spec["type"]
-    if name in {"aura_block", "aura_block_server"}:
+    if name in {"aura_block", "aura_block_server", "aura_pump_pair"}:
         params = {key: spec[key] for key in ("x", "y", "z")}
+        if name == "aura_pump_pair":
+            params["target_y"] = spec["target_y"]
     else:
         params = {}
     envelope = scenario_request(identity, "observe", name, params)
     value = envelope["result"]
+    if name == "aura_pump_pair":
+        value = _pump_pair_snapshot(value, envelope, spec)
     if name == "server_tick":
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise lab.LabError("server tick observation is unavailable")
@@ -253,6 +270,51 @@ def _scenario_observation(identity, spec):
                     or not before <= tick <= after):
                 raise lab.LabError("server Aura snapshot tick is not bound to its observation")
     return envelope, value
+
+
+def _pump_pair_snapshot(value, envelope, spec):
+    if (not isinstance(value, dict) or value.get("serverAuthoritative") is not True
+            or value.get("stateSource") != "integrated_server_pump_pair"):
+        raise lab.LabError("pump pair must be server authoritative")
+    tick = value.get("serverTick")
+    if (isinstance(tick, bool) or not isinstance(tick, int)
+            or envelope.get("server_tick_before") != tick or envelope.get("server_tick_after") != tick):
+        raise lab.LabError("pump pair must be atomic within one server tick")
+    for name, y, kind, block in (("pump", spec["y"], "PUMP", "aura:aura_node_pump"),
+                                  ("target", spec["target_y"], "NODE", "aura:aura_node")):
+        snapshot = value.get(name, {})
+        if (snapshot.get("serverTick") != tick or snapshot.get("serverAuthoritative") is not True
+                or snapshot.get("stateSource") != "integrated_server_block_entity"
+                or (snapshot.get("x"), snapshot.get("y"), snapshot.get("z")) != (spec["x"], y, spec["z"])
+                or snapshot.get("kind") != kind or snapshot.get("blockId") != block
+                or snapshot.get("serverWorldGameTime") != value.get("worldGameTime")):
+            raise lab.LabError("pump pair member identity or timing is unsupported")
+    inventory = value.get("inventory", {})
+    if inventory.get("serverTick") != tick:
+        raise lab.LabError("pump pair inventory is not atomic")
+    inventory = _inventory_snapshot(inventory)
+    if not inventory["complete"] or not inventory["server_authoritative"]:
+        raise lab.LabError("pump pair needs complete authoritative inventory")
+    pump, target = value["pump"]["pump"], value["target"]["node"]
+    for state in (pump, target):
+        amounts = state.get("auraByColor", {})
+        if not amounts or any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in amounts.values()):
+            raise lab.LabError("pump pair aura components unavailable")
+        if sum(amounts.values()) != state.get("totalAura") or sum(v for k, v in amounts.items() if k != "white"):
+            raise lab.LabError("core pump fixture requires only White aura")
+    result = {"type": "aura_pump_pair", "server_authoritative": True, "server_tick": tick,
+              "world_time": value.get("worldGameTime"), "x": spec["x"], "y": spec["y"],
+              "z": spec["z"], "target_y": spec["target_y"], "pump_aura": pump["totalAura"],
+              "target_aura": target["totalAura"], "power": pump.get("power"), "speed": pump.get("speed"),
+              "blocked": value.get("routeBlocked"), "inhibited": pump.get("inhibited"),
+              "ground_coal": value.get("nearbyCoalCount"),
+              "inventory_coal": sum(s["count"] for s in inventory["stacks"] if s["itemId"] == "minecraft:coal")}
+    for key in ("world_time", "pump_aura", "target_aura", "power", "speed", "ground_coal", "inventory_coal"):
+        if isinstance(result[key], bool) or not isinstance(result[key], int) or result[key] < 0:
+            raise lab.LabError("pump pair numeric field is unavailable")
+    if not isinstance(result["blocked"], bool) or not isinstance(result["inhibited"], bool):
+        raise lab.LabError("pump pair route state is unavailable")
+    return result
 
 
 def _component_complete(stack):
@@ -312,13 +374,7 @@ def missing_capability(step):
             if requirement not in SUPPORTED_REQUIREMENTS else None)
 
 
-def _route_action(identity, action):
-    name = action["type"]
-    params = {key: value for key, value in action.items() if key != "type"}
-    if name == "select_hotbar":
-        params["item_id"] = params.pop("item")
-    envelope = scenario_request(identity, "action", name, params)
-    result = envelope["result"]
+def _validate_action_ack(result, name):
     if not isinstance(result, dict):
         raise lab.LabError("scenario action acknowledgement has an unsupported shape", "fail")
     outcome = result.get("status")
@@ -333,6 +389,17 @@ def _route_action(identity, action):
     calls = result.get("inputCalls")
     if isinstance(calls, bool) or not isinstance(calls, int) or not 0 <= calls <= 64:
         raise lab.LabError("scenario action input count is invalid", "fail")
+
+
+def _route_action(identity, action):
+    name = action["type"]
+    params = {key: value for key, value in action.items() if key != "type"}
+    if name == "select_hotbar":
+        params["item_id"] = params.pop("item")
+    envelope = scenario_request(identity, "action", name, params)
+    result = envelope["result"]
+    _validate_action_ack(result, name)
+    outcome = result["status"]
     evidence = {"action_type": name, "acknowledged": True}
     if isinstance(outcome, str):
         evidence["acknowledgement_status"] = outcome[:32]
@@ -406,6 +473,8 @@ def _inventory_groups(snapshot):
 
 
 def _assert_typed(identity, requirement, observations):
+    if requirement["type"] == "pump_accounting":
+        return _assert_pump_accounting(requirement, observations)
     if requirement["type"] == "aura_increase":
         before = _find_observation(observations, requirement["before"], "aura_block_server")
         after = _find_observation(observations, requirement["after"], "aura_block_server")
@@ -445,7 +514,13 @@ def _assert_typed(identity, requirement, observations):
         raise lab.LabError("exact inventory conservation needs complete component digests")
     before_groups = _inventory_groups(left)
     after_groups = _inventory_groups(right)
+    before_count = sum(count for (item, _), count in before_groups.items() if item == requirement["item_id"])
+    after_count = sum(count for (item, _), count in after_groups.items() if item == requirement["item_id"])
     changed_target_groups = []
+    pickup = requirement.get("pickup_item_id")
+    if pickup == requirement["item_id"]:
+        raise lab.LabError("pickup and consumed item must differ")
+    pickup_changes = []
     actual_delta = 0
     for key in set(before_groups) | set(after_groups):
         change = after_groups.get(key, 0) - before_groups.get(key, 0)
@@ -453,15 +528,68 @@ def _assert_typed(identity, requirement, observations):
             if change:
                 changed_target_groups.append(change)
                 actual_delta += change
+        elif key[0] == pickup:
+            if before_groups.get(key, 0):
+                raise lab.LabError("expected pickup was already in the baseline inventory", "fail")
+            if change:
+                pickup_changes.append(change)
         elif change:
             raise lab.LabError("unrelated inventory stack count or components changed", "fail")
-    if len(changed_target_groups) > 1 or actual_delta != requirement["expected_count_delta"]:
-        raise lab.LabError("inventory count change contradicted the exact conservation assertion", "fail")
-    return {"assertion": "inventory_conservation", "before_inventory_sha256": left["digest"],
+    if pickup is not None and pickup_changes != [1]:
+        raise lab.LabError("expected one newly picked-up item", "fail")
+    evidence = {"assertion": "inventory_conservation", "before_inventory_sha256": left["digest"],
             "after_inventory_sha256": right["digest"], "component_digests_complete": True,
             "server_authoritative": True,
             "expected_count_delta": requirement["expected_count_delta"],
-            "actual_count_delta": actual_delta}
+            "actual_count_delta": actual_delta,
+            "before_count": before_count, "after_count": after_count,
+            **({"pickup_item_id": pickup, "pickup_count_delta": 1} if pickup is not None else {})}
+    if (len(changed_target_groups) > 1 or actual_delta != requirement["expected_count_delta"]
+            or ("expected_before_count" in requirement and before_count != requirement["expected_before_count"])
+            or ("expected_after_count" in requirement and after_count != requirement["expected_after_count"])):
+        error = lab.LabError("inventory count change contradicted the exact conservation assertion", "fail")
+        error.evidence = evidence
+        raise error
+    return evidence
+
+
+def _assert_pump_accounting(requirement, observations):
+    before, after, end = [_find_observation(observations, requirement[key], "aura_pump_pair")["value"]
+                          for key in ("before", "after", "end")]
+    mode, amount = requirement["mode"], requirement["expected_aura"]
+    evidence = {"assertion": "pump_accounting", "pump_accounting": {
+        "mode": mode, "before": before, "after": after, "end": end, "expected_aura": amount}}
+    def require(condition, reason):
+        if not condition:
+            error = lab.LabError(reason, "fail")
+            error.evidence = evidence
+            raise error
+    coords = lambda v: (v["x"], v["y"], v["z"], v["target_y"])
+    require(coords(before) == coords(after) == coords(end), "pump pair coordinate changed")
+    require(before["server_tick"] < after["server_tick"] < end["server_tick"], "pump pair snapshots are not ordered")
+    for state in (before, after, end):
+        require(state["server_authoritative"] is True, "pump pair snapshot is not authoritative")
+        require(state["pump_aura"] + state["target_aura"] == amount, "pump pair aura conservation failed")
+        require(state["ground_coal"] == 0 and not state["inhibited"], "pump fixture has nearby coal or redstone inhibition")
+        require(state["blocked"] == (mode == "blocked"), "pump route differs from control mode")
+    require(before["pump_aura"] == amount and before["target_aura"] == 0
+            and before["power"] == 0 and before["speed"] == 0 and before["inventory_coal"] == 1,
+            "pump fixture must begin charged but unfueled with one coal held")
+    pulses = (end["world_time"] - 2) // 20 - (after["world_time"] - 2) // 20
+    require(pulses >= 2 and end["world_time"] > after["world_time"], "pump runtime observation window too short")
+    for state in (after, end):
+        require(state["pump_aura"] == (0 if mode == "flow" else amount)
+                and state["target_aura"] == (amount if mode == "flow" else 0), "pump transfer outcome differs from control mode")
+        require(state["inventory_coal"] == (1 if mode == "unfueled" else 0), "coal inventory accounting failed")
+        if mode == "unfueled":
+            require(state["power"] == 0 and state["speed"] == 0, "unfueled pump acquired fuel")
+        else:
+            require(state["speed"] == 300 and 0 < state["power"] <= 320, "coal fuel power or speed is incorrect")
+            if mode == "blocked":
+                require(state["power"] == 320, "blocked pump spent fuel without reaching target")
+    if mode == "flow":
+        require(after["power"] - end["power"] == pulses, "pump runtime spend differs from normal target-attempt pulses")
+    return evidence
 
 
 def _step(identity, step, out, keyframes_left, observations, wall_deadline, cancel_event=None):
@@ -481,6 +609,8 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     typed_evidence.append({"type": name, "server_tick": value,
                                            "server_tick_before": envelope.get("server_tick_before"),
                                            "server_tick_after": envelope.get("server_tick_after")})
+                elif name == "aura_pump_pair":
+                    typed_evidence.append(value)
                 elif name == "player_inventory":
                     snapshot = _inventory_snapshot(value)
                     record["value"] = snapshot
@@ -492,6 +622,9 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                                "server_tick_after": envelope.get("server_tick_after")}
                     if snapshot["digest"]:
                         summary["inventory_sha256"] = snapshot["digest"]
+                        summary["items"] = [{"item_id": stack["itemId"], "count": stack["count"],
+                                             "component_sha256": stack["componentSetSha256"]}
+                                            for stack in snapshot["stacks"]]
                     typed_evidence.append(summary)
                 else:
                     summary = {"type": name, "x": value["x"], "y": value["y"], "z": value["z"],

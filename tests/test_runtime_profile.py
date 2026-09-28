@@ -81,6 +81,12 @@ class RuntimeProfileTests(unittest.TestCase):
             runtime_profile.prepare(self.manifest_file, self.root / "prepared")
         self.assertFalse((self.root / "prepared").exists())
 
+    def test_uncertain_seed_refuses_preparation(self):
+        (self.root / ".mc-mod-lab-uncertain").write_text("ambiguous action", encoding="utf-8")
+        with self.assertRaisesRegex(lab.LabError, "uncertain action"):
+            runtime_profile.prepare(self.manifest_file, self.root / "prepared")
+        self.assertFalse((self.root / "prepared").exists())
+
     def test_bad_launcher_hash_refuses_before_output(self):
         self.manifest["launcher_args_sha256"] = "0" * 64
         self.save()
@@ -157,7 +163,7 @@ class RuntimeProfileTests(unittest.TestCase):
                 return 0
 
         with patch.object(runtime_launch.subprocess, "Popen", return_value=FakeProcess()), \
-             patch.object(runtime_launch, "_choose_port", return_value=9875), \
+             patch.object(runtime_launch, "_reserve_port", return_value=(9875, tempfile.TemporaryFile())), \
              patch.object(runtime_launch, "_wait_ready", return_value={"pid": 123}), \
              patch.object(runtime_launch.scenario_v2, "run", return_value={"status": "pass"}), \
              patch.object(runtime_launch, "_close_owned", return_value={"status": "pass", "exit_code": 0}):

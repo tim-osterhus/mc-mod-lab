@@ -9,6 +9,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import tempfile
 import time
 
 import contracts
@@ -16,8 +17,10 @@ import lab
 import scenario_v2
 
 
-def _choose_port():
+def _choose_port(excluded=()):
     for port in range(9875, 9699, -1):
+        if port in excluded:
+            continue
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             try:
                 probe.bind(("127.0.0.1", port))
@@ -25,6 +28,29 @@ def _choose_port():
             except OSError:
                 continue
     raise lab.LabError("no isolated loopback bridge port is available")
+
+
+def _reserve_port():
+    # Hold a process-owned lock through startup, before Java opens its listener.
+    if platform.system() != "Windows":
+        raise lab.LabError("packaged runtime port reservations require Windows")
+    import msvcrt
+    excluded = set()
+    while len(excluded) < 176:
+        port = _choose_port(excluded)
+        path = Path(tempfile.gettempdir()) / ("mc-mod-lab-port-" + str(port) + ".lock")
+        stream = path.open("a+b")
+        try:
+            if path.stat().st_size == 0:
+                stream.write(b"0")
+                stream.flush()
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            return port, stream
+        except OSError:
+            stream.close()
+            excluded.add(port)
+    raise lab.LabError("no isolated loopback bridge port reservation is available")
 
 
 def _owned_loopback_ports(pid):
@@ -207,7 +233,7 @@ def launch(manifest_path, profile_path, scenario_path):
                          "peak_private_mib": 0, "samples": 0, "sampling_error": False,
                          "hard_cap": False, "interval_seconds": 0.5}}
     token = secrets.token_hex(32)
-    port = _choose_port()
+    port, port_lock = _reserve_port()
     previous = os.environ.get("MC_MOD_LAB_TOKEN")
     os.environ["MC_MOD_LAB_TOKEN"] = token
     permitted_env = ("SystemRoot", "WINDIR", "PATH", "TEMP", "TMP", "USERPROFILE",
@@ -252,6 +278,7 @@ def launch(manifest_path, profile_path, scenario_path):
         stop.set()
         if monitor is not None:
             monitor.join(timeout=5)
+        port_lock.close()
         if previous is None:
             os.environ.pop("MC_MOD_LAB_TOKEN", None)
         else:

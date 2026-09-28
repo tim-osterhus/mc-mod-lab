@@ -18,8 +18,10 @@ copied to the fresh profile and checked against scenario, metadata, and log.
 
 The runner shares the alpha's marked disposable world, exact process/game
 directory check, authenticated loopback and 3,800 MiB working-set guard.
-`fixture create` holds a nonblocking source `session.lock` when present and
-omits that lock from the new world copy; a held lock refuses the copy.
+`fixture create` requires and holds a nonblocking source `session.lock` and
+omits that lock from the new world copy; a held or missing lock refuses the copy.
+Do not fabricate a lock to bypass that refusal: close the original game normally
+and use its intact save. A prepared but never-launched copy is not a seed.
 It additionally verifies an exact artifact hash, `fabric.mod.json` ID/version,
 unique matching JAR in that profile's `mods` directory and matching fresh
 Fabric launch-log entry. These checks are strong identity evidence, but the
@@ -56,11 +58,18 @@ single-item drops, block aiming, and crosshair-verified block use. Exact
 inventory assertions require server authority and complete component-patch
 digests. Aura increase assertions require server-thread observations of the
 same block. These assertions do not establish causality by themselves.
+The fixed `aura_pump_pair` observer captures one burning pump, its upward node,
+route obstruction, nearby coal count, and player inventory in a single server
+task. `pump_accounting` checks the reviewed White-aura core fixture's exact
+conservation, fuel speed, and 20-tick target-attempt spending, with explicit
+flow/unfueled/blocked modes. It is not a general network simulation checker.
+Inventory conservation supports an explicitly declared single new pickup as
+the only extra inventory change, for acquiring the Black Hole from the ground.
 Action acknowledgements alone do not establish gameplay semantics. PNGs stay
 `not_reviewed` until an independent visual review.
 
 Unsupported now: nearby entities, semantic movement/equip, event waits,
-per-render HUD metrics, normal save/reopen continuation, atomic multi-block
+per-render HUD metrics, normal save/reopen continuation, arbitrary multi-block
 conservation, and complete automation of the five Aura acceptance cases.
 Owned packaged launch and normal exit are available through `runtime launch`,
 not the already-running-client `scenario run` command.
@@ -75,13 +84,20 @@ from equivalent clean fixtures, change only the intended causal input, and
 assert the actual required outcome. An ambient increase or unrelated action
 followed by a delta is only a state observation, not a mechanic proof.
 
-A typed action timeout or transport failure has an uncertain outcome: a
+After sending a typed action, every failure before a fully validated matching
+acknowledgement quarantines the profile. This includes HTTP errors, oversized
+or malformed responses, invalid envelopes/ticks, and invalid acknowledgements.
+Pre-send token/capability/PID checks and read-only failures do not quarantine.
+An uncertain outcome matters because a
 callback already executing may complete after the HTTP timeout. The runner
 marks the game directory `.mc-mod-lab-uncertain`, refuses further requests,
 and rejects it as a seed for later fixtures. The bridge also refuses further
 typed actions after its own timeout. Do not remove the marker to retry; start
 from the original clean seed. Normal cleanup still releases controls and
 closes the owned client. The marker is diagnostic metadata, not a rollback.
+Concurrent owned launchers reserve their selected loopback ports with an OS
+file lock through startup and shutdown, before Java binds its listener. Port
+probing alone does not prevent two starting profiles from selecting the same port.
 
 Control mode uses an exclusive lock in the selected profile. Successful exit
 removes the lock. If exit is not confirmed, the report fails and leaves the

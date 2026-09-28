@@ -56,10 +56,24 @@
      "then": {"required": ["visual_reviewer"]}}
   ],
   "$defs": {
+    "pump_pair": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "server_authoritative", "server_tick", "world_time", "x", "y", "z", "target_y", "pump_aura", "target_aura", "power", "speed", "blocked", "inhibited", "ground_coal", "inventory_coal"],
+      "properties": {
+        "type": {"const": "aura_pump_pair"}, "server_authoritative": {"const": true},
+        "server_tick": {"type": "integer", "minimum": 0}, "world_time": {"type": "integer", "minimum": 0},
+        "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"}, "target_y": {"type": "integer"},
+        "pump_aura": {"type": "integer", "minimum": 0}, "target_aura": {"type": "integer", "minimum": 0},
+        "power": {"type": "integer", "minimum": 0}, "speed": {"type": "integer", "minimum": 0},
+        "blocked": {"type": "boolean"}, "inhibited": {"type": "boolean"},
+        "ground_coal": {"type": "integer", "minimum": 0}, "inventory_coal": {"type": "integer", "minimum": 0}
+      }
+    },
     "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "status": {"enum": ["pass", "fail", "inconclusive", "unsupported", "not_run"]},
     "typed_observation": {
       "oneOf": [
+        {"$ref": "#/$defs/pump_pair"},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "server_tick"],
@@ -75,6 +89,12 @@
           "properties": {
             "type": {"const": "player_inventory"}, "stack_count": {"type": "integer", "minimum": 0, "maximum": 41},
             "component_digests_complete": {"type": "boolean"}, "inventory_sha256": {"$ref": "#/$defs/hash"},
+            "items": {"type": "array", "maxItems": 41, "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["item_id", "count", "component_sha256"],
+              "properties": {"item_id": {"type": "string", "maxLength": 128},
+                "count": {"type": "integer", "minimum": 1}, "component_sha256": {"$ref": "#/$defs/hash"}}
+            }},
             "server_authoritative": {"type": "boolean"}, "state_source": {"type": "string", "maxLength": 64},
             "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
             "server_tick_after": {"type": ["integer", "null"], "minimum": 0}
@@ -110,6 +130,13 @@
         "evidence": {
           "type": "object", "additionalProperties": false,
           "properties": {
+            "pump_accounting": {
+              "type": "object", "additionalProperties": false,
+              "required": ["mode", "before", "after", "end", "expected_aura"],
+              "properties": {"mode": {"enum": ["flow", "unfueled", "blocked"]},
+                "before": {"$ref": "#/$defs/pump_pair"}, "after": {"$ref": "#/$defs/pump_pair"},
+                "end": {"$ref": "#/$defs/pump_pair"}, "expected_aura": {"type": "integer", "minimum": 1}}
+            },
             "world_name": {"type": "string", "maxLength": 160},
             "screen_class": {"type": ["string", "null"], "maxLength": 160},
             "screenshot": {"type": "string", "maxLength": 180},
@@ -120,7 +147,7 @@
             "acknowledgement_status": {"type": "string", "maxLength": 32},
             "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
             "server_tick_after": {"type": ["integer", "null"], "minimum": 0},
-            "ticks_elapsed": {"type": "integer", "minimum": 0, "maximum": 1200},
+            "ticks_elapsed": {"type": "integer", "minimum": 0},
             "ticks_requested": {"type": "integer", "minimum": 1, "maximum": 1200},
             "typed_observations": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/typed_observation"}},
             "assertion": {"type": "string", "maxLength": 80},
@@ -140,8 +167,12 @@
             "before_inventory_sha256": {"$ref": "#/$defs/hash"},
             "after_inventory_sha256": {"$ref": "#/$defs/hash"},
             "component_digests_complete": {"type": "boolean"},
-            "expected_count_delta": {"type": "integer", "minimum": -64, "maximum": 64},
-            "actual_count_delta": {"type": "integer", "minimum": -64, "maximum": 64}
+            "expected_count_delta": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "actual_count_delta": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "before_count": {"type": "integer", "minimum": 0},
+            "after_count": {"type": "integer", "minimum": 0},
+            "pickup_item_id": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"},
+            "pickup_count_delta": {"const": 1}
           }
         }
       }

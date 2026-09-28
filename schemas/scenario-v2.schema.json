@@ -71,6 +71,12 @@
     "typed_observation": {
       "oneOf": [
         {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "x", "y", "z", "target_y"],
+          "properties": {"type": {"const": "aura_pump_pair"}, "x": {"$ref": "#/$defs/x"},
+            "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}, "target_y": {"$ref": "#/$defs/y"}}
+        },
+        {
           "type": "object",
           "additionalProperties": false,
           "required": ["type"],
@@ -172,6 +178,14 @@
       "oneOf": [
         {
           "type": "object", "additionalProperties": false,
+          "required": ["type", "before", "after", "end", "mode", "expected_aura"],
+          "properties": {"type": {"const": "pump_accounting"}, "before": {"$ref": "#/$defs/id"},
+            "after": {"$ref": "#/$defs/id"}, "end": {"$ref": "#/$defs/id"},
+            "mode": {"enum": ["flow", "unfueled", "blocked"]},
+            "expected_aura": {"type": "integer", "minimum": 1, "maximum": 1000000}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
           "required": ["type", "equals"],
           "properties": {"type": {"const": "screen_class"}, "equals": {"type": "string", "minLength": 1, "maxLength": 160}}
         },
@@ -204,7 +218,10 @@
           "properties": {
             "type": {"const": "inventory_conservation"}, "before": {"$ref": "#/$defs/id"}, "after": {"$ref": "#/$defs/id"},
             "item_id": {"$ref": "#/$defs/registry_id"},
-            "expected_count_delta": {"type": "integer", "minimum": -64, "maximum": 64}
+            "expected_count_delta": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "expected_before_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+            "expected_after_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+            "pickup_item_id": {"$ref": "#/$defs/registry_id"}
           }
         }
       ]

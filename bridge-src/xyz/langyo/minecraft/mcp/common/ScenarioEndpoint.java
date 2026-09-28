@@ -27,7 +27,7 @@ public final class ScenarioEndpoint implements HttpHandler {
     private static final int MAX_BODY_BYTES = 4096;
     private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
     private static final Set<String> OBSERVATIONS = new HashSet<String>(
-            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server"));
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair"));
     private static final Set<String> ACTIONS = new HashSet<String>(
             Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block"));
 
@@ -65,6 +65,7 @@ public final class ScenarioEndpoint implements HttpHandler {
                     try {
                         if (!expired.get()) {
                             if ("aura_block_server".equals(request.name)
+                                    || "aura_pump_pair".equals(request.name)
                                     || "player_inventory".equals(request.name)) {
                                 net.minecraft.class_1132 server = client.method_1576();
                                 if (server == null || client.field_1687 == null || client.field_1724 == null) {
@@ -136,6 +137,8 @@ public final class ScenarioEndpoint implements HttpHandler {
         net.minecraft.class_3218 level = server.method_3847(dimension);
         boolean inventory = "player_inventory".equals(request.name);
         Object payload = inventory ? ScenarioObservers.playerInventoryServer(server, playerId).orElse(null)
+                : "aura_pump_pair".equals(request.name)
+                ? pumpPair(server, level, playerId, request)
                 : ScenarioObservers.auraAtServer(level, request.x, request.y, request.z).orElse(null);
         result.addProperty("server_tick_after", server.method_3780());
         result.addProperty("observation_source", inventory ? "integrated_server_inventory"
@@ -144,6 +147,46 @@ public final class ScenarioEndpoint implements HttpHandler {
             result.addProperty("status", "ok");
             result.add("result", GSON.toJsonTree(payload));
         }
+        return result;
+    }
+
+    private static JsonObject pumpPair(net.minecraft.class_1132 server, net.minecraft.class_3218 level,
+            java.util.UUID playerId, Request request) {
+        if (level == null || !server.method_18854()) return null;
+        ScenarioObservers.AuraSnapshot pump = ScenarioObservers.auraAtServer(
+                level, request.x, request.y, request.z).orElse(null);
+        ScenarioObservers.AuraSnapshot target = ScenarioObservers.auraAtServer(
+                level, request.x, request.targetY, request.z).orElse(null);
+        if (pump == null || target == null || pump.kind != ScenarioObservers.AuraKind.PUMP
+                || target.kind != ScenarioObservers.AuraKind.NODE) return null;
+        ScenarioObservers.InventorySnapshot inventory = ScenarioObservers.playerInventoryServer(server, playerId).orElse(null);
+        if (inventory == null) return null;
+        boolean blocked = false;
+        for (int y = request.y + 1; y < request.targetY; y++) {
+            net.minecraft.class_2338 pos = new net.minecraft.class_2338(request.x, y, request.z);
+            if (!level.method_22340(pos)) return null;
+            if (level.method_8321(pos) != null) return null; // Intermediate consumers make pair accounting ambiguous.
+            blocked |= level.method_8320(pos).method_26225();
+        }
+        java.util.List<net.minecraft.class_1542> items = level.method_18467(net.minecraft.class_1542.class,
+                new net.minecraft.class_238(request.x - 3, request.y - 3, request.z - 3,
+                        request.x + 4, request.y + 4, request.z + 4));
+        if (items.size() > 64) return null;
+        int coal = 0;
+        for (net.minecraft.class_1542 item : items) {
+            net.minecraft.class_1799 stack = item.method_6983();
+            if ("minecraft:coal".equals(ScenarioObservers.itemId(stack))) coal += stack.method_7947();
+        }
+        JsonObject result = new JsonObject();
+        result.addProperty("serverAuthoritative", true);
+        result.addProperty("stateSource", "integrated_server_pump_pair");
+        result.addProperty("serverTick", server.method_3780());
+        result.addProperty("worldGameTime", level.method_8510());
+        result.addProperty("routeBlocked", blocked);
+        result.addProperty("nearbyCoalCount", coal);
+        result.add("pump", GSON.toJsonTree(pump));
+        result.add("target", GSON.toJsonTree(target));
+        result.add("inventory", GSON.toJsonTree(inventory));
         return result;
     }
 
@@ -227,7 +270,10 @@ public final class ScenarioEndpoint implements HttpHandler {
             request.slot = integer(params, "slot", 0, 8);
             request.itemId = registryId(params, "item_id");
         } else {
-            if ("aura_block".equals(name) || "aura_block_server".equals(name)) {
+            if ("aura_pump_pair".equals(name)) {
+                fields(params, "x", "y", "z", "target_y");
+                request.targetY = integer(params, "target_y", -64, 319);
+            } else if ("aura_block".equals(name) || "aura_block_server".equals(name)) {
                 fields(params, "x", "y", "z");
             } else {
                 fields(params, "x", "y", "z", "block_id");
@@ -235,7 +281,10 @@ public final class ScenarioEndpoint implements HttpHandler {
             request.x = integer(params, "x", -30000000, 30000000);
             request.y = integer(params, "y", -64, 319);
             request.z = integer(params, "z", -30000000, 30000000);
-            if (!"aura_block".equals(name) && !"aura_block_server".equals(name)) {
+            if ("aura_pump_pair".equals(name)) {
+                if (request.targetY <= request.y || request.targetY > request.y + 15)
+                    throw new IllegalArgumentException("target must be within upward fixture range");
+            } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name)) {
                 request.blockId = registryId(params, "block_id");
             }
         }
@@ -349,6 +398,7 @@ public final class ScenarioEndpoint implements HttpHandler {
         int x;
         int y;
         int z;
+        int targetY;
         int slot;
         int count;
         String itemId;

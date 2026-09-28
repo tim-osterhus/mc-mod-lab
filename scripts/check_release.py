@@ -42,6 +42,10 @@ def check_release():
     for scenario in ("examples/scenario.json", "examples/inventory-scenario.json", "examples/vanilla-book/scenario.json"):
         lab.validate_scenario(contracts.load(ROOT / scenario))
     contracts.validate_file(ROOT / "examples/scenario-v2.json", "scenario-v2", portable=True)
+    import scenario_v2
+    for scenario in (ROOT / "examples").glob("aura-*.json"):
+        contracts.validate_file(scenario, "scenario-v2", portable=True)
+        scenario_v2.validate_scenario(contracts.load(scenario))
     runtime_example = contracts.load(ROOT / "examples/runtime-profile.example.json")
     contracts.schema_check(runtime_example, "runtime-profile")
     contracts.portable_check(runtime_example)

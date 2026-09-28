@@ -88,6 +88,11 @@ uses one newer bridge for both cases and supersedes the earlier client-cache
 inventory evidence. It records exact evidence locations, tests, and remaining
 acceptance gaps.
 
+The later [core and passive inventory checkpoint](checkpoints/2026-09-27-core-and-black-hole.md)
+adds a fixed atomic pump-pair observer, fuel/runtime accounting, and matched
+blocked/unfueled controls, plus the bounded Black Hole inventory fixture.
+Pusher, shared storage reload, and per-render HUD acceptance remain pending.
+
 Use a reviewed local [runtime manifest example](../examples/runtime-profile.example.json)
 to prepare a fresh profile. The launcher argument file is executable input:
 its hash detects changes, but does not sandbox the classpath or authenticate

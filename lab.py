@@ -661,8 +661,7 @@ def fixture_create(seed, root, fixture_id, world_name):
 def closed_seed_lock(seed):
     lock = seed / "session.lock"
     if not lock.exists():
-        yield
-        return
+        raise LabError("seed session lock is missing; closed-world ownership cannot be verified")
     try:
         fd = os.open(lock, os.O_RDWR)
     except OSError as exc:

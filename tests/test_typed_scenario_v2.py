@@ -12,6 +12,34 @@ import scenario_v2 as runner
 
 
 class TypedScenarioTests(unittest.TestCase):
+    def test_black_hole_pickup_is_only_allowed_extra_change(self):
+        def stack(item, count, digest="a" * 64):
+            return {"itemId": item, "count": count, "componentSetSha256": digest}
+        before = {"complete": True, "server_authoritative": True, "digest": "b" * 64,
+                  "stacks": [stack("minecraft:cobblestone", 64), stack("minecraft:cobblestone", 21),
+                             stack("minecraft:cobblestone", 17), stack("minecraft:diamond", 3, "c" * 64)]}
+        after = {"complete": True, "server_authoritative": True, "digest": "d" * 64,
+                 "stacks": [stack("aura:portable_black_hole", 1), stack("minecraft:diamond", 3, "c" * 64)]}
+        observations = {name: {("player_inventory", None, None, None): {"value": value}}
+                        for name, value in (("before", before), ("after", after))}
+        requirement = {"type": "inventory_conservation", "before": "before", "after": "after",
+                       "item_id": "minecraft:cobblestone", "expected_count_delta": -102,
+                       "pickup_item_id": "aura:portable_black_hole"}
+        runner._assert_typed({}, requirement, observations)
+        requirement.update(expected_before_count=102, expected_after_count=0)
+        runner._assert_typed({}, requirement, observations)
+        before["stacks"][0]["count"] = 65
+        with self.assertRaises(lab.LabError):
+            runner._assert_typed({}, requirement, observations)
+        before["stacks"][0]["count"] = 64
+        after["stacks"][1]["componentSetSha256"] = "e" * 64
+        with self.assertRaisesRegex(lab.LabError, "unrelated inventory"):
+            runner._assert_typed({}, requirement, observations)
+        after["stacks"][1]["componentSetSha256"] = "c" * 64
+        after["stacks"][0]["count"] = 2
+        with self.assertRaisesRegex(lab.LabError, "one newly picked-up"):
+            runner._assert_typed({}, requirement, observations)
+
     def test_client_predicted_inventory_refused(self):
         client = {"stacks": [], "truncated": False, "serverAuthoritative": False,
                   "stateSource": "client_inventory_cache"}
@@ -39,14 +67,49 @@ class TypedScenarioTests(unittest.TestCase):
             runner._assert_typed({}, requirement, observations)
 
     def test_timed_out_dispatch_quarantines_profile_and_seed(self):
+        self.check_uncertain_dispatch(504)
+
+    def test_partial_dispatch_422_quarantines_profile_and_seed(self):
+        self.check_uncertain_dispatch(422)
+
+    def test_every_malformed_post_action_response_is_quarantined(self):
+        valid = {"schema_version": 2, "status": "ok", "kind": "action", "name": "drop_selected",
+                 "result": {"action": "drop_selected", "status": "input_dispatched", "inputCalls": 1}}
+        cases = [(500, b'{}'), (200, b'{'), (200, b'x' * (runner.MAX_SCENARIO_RESPONSE_BYTES + 1)),
+                 (200, b'{}'), (200, json.dumps({**valid, "result": {}}).encode()),
+                 (200, json.dumps({**valid, "server_tick_after": True}).encode())]
+        for status, body in cases:
+            with self.subTest(status=status, size=len(body)):
+                self.check_uncertain_dispatch(status, body)
+
+    def test_presend_and_readonly_failures_do_not_quarantine(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            identity = {"pid": 12, "port": 9875, "game_dir": temporary}
+            marker = Path(temporary) / runner.UNCERTAIN_MARKER
+            with patch.object(lab, "listening_socket", side_effect=lab.LabError("PID mismatch")), \
+                    patch.dict(os.environ, {"MC_MOD_LAB_TOKEN": "x" * 32}):
+                with self.assertRaises(lab.LabError):
+                    runner.scenario_request(identity, "action", "drop_selected", {"count": 1})
+            self.assertFalse(marker.exists())
+            connection = Mock()
+            connection.getresponse.return_value.status = 200
+            connection.getresponse.return_value.read.return_value = b'{'
+            with patch.object(lab, "listening_socket"), \
+                    patch.dict(os.environ, {"MC_MOD_LAB_TOKEN": "x" * 32}), \
+                    patch.object(runner.http.client, "HTTPConnection", return_value=connection):
+                with self.assertRaises(lab.LabError):
+                    runner.scenario_request(identity, "observe", "server_tick", {})
+            self.assertFalse(marker.exists())
+
+    def check_uncertain_dispatch(self, status, body=b'{"status":"error"}'):
         with tempfile.TemporaryDirectory() as temporary:
             game = Path(temporary) / "game"
             seed = game / "saves" / "fixture"
             seed.mkdir(parents=True)
             identity = {"pid": 12, "port": 9875, "game_dir": str(game)}
             connection = Mock()
-            connection.getresponse.return_value.status = 504
-            connection.getresponse.return_value.read.return_value = b'{"status":"error"}'
+            connection.getresponse.return_value.status = status
+            connection.getresponse.return_value.read.return_value = body
             with patch.dict(os.environ, {"MC_MOD_LAB_TOKEN": "x" * 32}), \
                     patch.object(lab, "listening_socket"), \
                     patch.object(runner.http.client, "HTTPConnection", return_value=connection):

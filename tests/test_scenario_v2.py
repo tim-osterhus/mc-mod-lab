@@ -18,6 +18,7 @@ class ScenarioV2Tests(unittest.TestCase):
         seed = self.root / "seed"
         seed.mkdir()
         (seed / "level.dat").write_bytes(b"world")
+        (seed / "session.lock").write_bytes(b"seed lock")
         self.game = self.root / "game"
         self.world = lab.fixture_create(seed, self.game / "saves", "fixture", "LabFixture")
         log = self.game / "logs" / "latest.log"
