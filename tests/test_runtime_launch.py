@@ -137,6 +137,7 @@ class RuntimeLaunchTests(unittest.TestCase):
                 pass
 
         with patch.object(runtime_launch.subprocess, "Popen", side_effect=spawn), \
+             patch.object(runtime_launch.subprocess, "CREATE_NO_WINDOW", 0x08000000, create=True), \
              patch.object(runtime_launch, "_reserve_port", return_value=(port, tempfile.TemporaryFile())), \
              patch.object(runtime_launch, "_wait_ready", side_effect=ready), \
              patch.object(runtime_launch.scenario_v2, "run", side_effect=run_scenario), \
@@ -146,6 +147,7 @@ class RuntimeLaunchTests(unittest.TestCase):
              patch.object(runtime_launch.threading, "Thread", InlineThread), \
              patch.object(runtime_launch.platform, "system", return_value="Windows"):
             result = runtime_launch.launch(self.manifest_file, profile, scenario_file)
+        self.assertEqual(observed["popen_kwargs"]["creationflags"], 0x08000000)
         return result, observed
 
     def test_modified_args_or_jar_are_refused_before_spawning(self):
