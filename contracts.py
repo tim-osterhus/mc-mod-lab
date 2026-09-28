@@ -126,6 +126,19 @@ def validate_parity(value, root, portable=False):
             raise ContractError("visual assessment needs an independent reviewer")
         if check["artifact"]:
             path = artifact_path(root, check["artifact"])
+            if dimension == "deterministic_test":
+                gametest_required = value["feature"] == "aura.conserved-transfer.gametest" and status in {"pass", "fail"}
+                if gametest_required and path.suffix != ".json":
+                    raise ContractError("GameTest feature requires a typed GameTest JSON report")
+                report = load(path) if path.suffix == ".json" else None
+                is_gametest = isinstance(report, dict) and report.get("kind") == "fabric-gametest"
+                if gametest_required and not is_gametest:
+                    raise ContractError("GameTest feature requires a typed GameTest JSON report")
+                if is_gametest:
+                    from gametest_import import import_run
+                    verified = import_run(path.parent, report.get("adapter_sha256", ""))
+                    if verified != report or report["status"] != status:
+                        raise ContractError("deterministic check contradicts GameTest evidence")
             if dimension == "client_check":
                 report = load(path)
                 validate_report(report, path.parent, portable)

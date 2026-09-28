@@ -3,8 +3,9 @@
 Status: the bounded milestones 1-3 first slice is accepted; see the
 [five-case evidence record](../checkpoints/2026-09-27-five-proof-slice.md).
 Broader illustrative semantic actions below remain unsupported unless explicitly
-listed in [scenario-v2.md](../scenario-v2.md). Milestone 4 is pending next;
-milestone 5 remains later/deferred. The full spec is not yet implemented.
+listed in [scenario-v2.md](../scenario-v2.md). Milestone 4 now has its bounded
+[GameTest adapter/importer and live conservation proof](../checkpoints/2026-09-27-gametest.md).
+Milestone 5 remains later/deferred. The full spec is not yet implemented.
 Target: Minecraft 1.21.1 Fabric first, with Aura
 Cascade Reimagined as the first case study. This document
 specifies reusable Mod Lab engineering. The Aura-specific execution plan and
@@ -48,8 +49,9 @@ one of four GUI actions with a before/after screenshot and screen assertion.
 `schemas/parity.schema.json` validate artifact hashes and keep deterministic,
 client, and visual dimensions independent. `docs/completion.md` explicitly
 excludes automatic launch, production JARs, multiplayer, and generic command
-execution from the completed alpha. GameTest is likewise not implemented in
-this repo. None is implicitly available now.
+execution from the completed alpha. Later v2 checkpoints add only their stated
+capabilities; the separate [GameTest lane](../gametest.md) now implements the
+bounded milestone 4 transfer test. No broader suite is implicitly available.
 
 Aura's existing audit ledger and the linked Aura-specific playtesting spec
 determine feature expectations. The five cases above are acceptance references

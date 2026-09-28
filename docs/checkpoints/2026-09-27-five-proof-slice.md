@@ -139,8 +139,10 @@ The Aura coverage ledger remains in the sibling repo at
 five harness acceptance references. The known juvenile Breeder defect and other
 project-specific gaps are not resolved or marked green by this checkpoint.
 
-Spec milestone 4 (Fabric GameTest importer and deterministic in-world
-conservation) is pending next, not implemented or canceled. Milestone 5 remains
+At this checkpoint, spec milestone 4 (Fabric GameTest importer and deterministic
+in-world conservation) was pending next, not canceled. Its subsequent bounded
+implementation is recorded in [the GameTest checkpoint](2026-09-27-gametest.md).
+Milestone 5 remains
 later/deferred: broader matrix, randomized trials,
 multiplayer integration, profiling and survival-agent/NPC backend evaluation.
 There is no pathfinding, generic NBT/command escape, automatic baseline

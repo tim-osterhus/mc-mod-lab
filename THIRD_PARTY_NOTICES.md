@@ -38,5 +38,8 @@ SOFTWARE.
 Gson (Apache-2.0) is a separately supplied compiler/runtime dependency; its JAR is
 not bundled. Python jsonschema (MIT) and its dependencies are installed separately
 from `requirements.txt`; their installed distributions carry their own notices.
-Patchouli and Aura are present in the recorded pilot environment but are not
-dependencies or redistributable assets of this toolkit.
+The bounded Aura GameTest profile also requires separately supplied Fabric API
+and its GameTest module (Apache-2.0), Fabric Loader (Apache-2.0), Patchouli, and
+the exact Aura release. They are external runtime inputs, not redistributed
+assets of this toolkit. The adapter invokes their APIs; their respective
+distributions retain their own licenses and notices.

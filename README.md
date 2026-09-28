@@ -11,6 +11,9 @@ covers five bounded exact-artifact Aura harness cases and their controls.
 It does not claim full mod parity, autonomous Survival or general visual approval.
 The [packaged bridge guide](docs/packaged-bridge.md) documents its pinned build
 and security boundary.
+The [Fabric GameTest lane](docs/gametest.md) adds a separate pinned, headless
+in-world conservation test and XML importer. It never promotes client or visual
+coverage from a deterministic result.
 
 ## Pinned bridge candidate and safety
 
@@ -69,5 +72,6 @@ Minecraft is by Mojang Studios/Microsoft. [Minecraft Mod MCP](https://github.com
 The original alpha was validated in a Windows Minecraft 1.21.1 Fabric Mojmap
 dev instance. The public-source 1.21.1 intermediary bridge builder has since
 passed a separate packaged-release world/player/full-frame smoke with a
-denylisted command probe and normal exit. The five Aura gameplay proofs have
-not yet passed through Mod Lab. See the v2 checkpoint for exact scope.
+denylisted command probe and normal exit. Five bounded Aura harness proofs have
+since passed through Mod Lab; see the first-slice record for exact scope and
+limitations, not a claim of full mod parity.

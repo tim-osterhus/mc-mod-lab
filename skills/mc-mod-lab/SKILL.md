@@ -35,6 +35,14 @@ independent PNG/ROI review; capture success is not visual approval.
 A private diagnostic bridge is not a supported public backend.
 Unsupported steps must remain unsupported in the report.
 
+For the separate deterministic lane, read `docs/gametest.md`. The fixed
+Fabric 1.21.1 GameTest adapter runs only the reviewed packaged Aura conservation
+fixture in a fresh headless profile. Use its explicit runtime inventory and
+reviewed adapter hash; never download extra mods or reuse a valued server.
+Import both the real positive and intended-failure control with
+`gametest_import.py`; client and visual checks stay `not_run`. This is not
+a substitute for real-player callbacks, screenshots, or Survival playtesting.
+
 Keep source collection portable: public URLs/timestamps or a named local evidence
 bundle, never copied private user paths or downloaded videos. Implement one
 feature slice in the target mod only when separately authorized, and preserve
