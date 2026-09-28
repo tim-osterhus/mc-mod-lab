@@ -1,0 +1,362 @@
+package xyz.langyo.minecraft.mcp.common;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.class_310;
+
+/** Fixed, typed scenario surface. Authentication is supplied by McpHttpServer. */
+public final class ScenarioEndpoint implements HttpHandler {
+    private static final Gson GSON = new Gson();
+    private static final int MAX_BODY_BYTES = 4096;
+    private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
+    private static final Set<String> OBSERVATIONS = new HashSet<String>(
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server"));
+    private static final Set<String> ACTIONS = new HashSet<String>(
+            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block"));
+
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            send(exchange, 405, error("method_not_allowed"));
+            return;
+        }
+        Request request;
+        try {
+            request = parse(readBody(exchange));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 400, error("invalid_request"));
+            return;
+        }
+        Object instance = ReflectionHelper.getMinecraftInstance();
+        if (!(instance instanceof class_310)) {
+            send(exchange, 503, error("client_unavailable"));
+            return;
+        }
+        class_310 client = (class_310) instance;
+        if ("action".equals(request.kind) && ACTION_OUTCOME_UNCERTAIN.get()) {
+            send(exchange, 503, error("action_outcome_uncertain"));
+            return;
+        }
+        AtomicReference<JsonObject> response = new AtomicReference<JsonObject>();
+        AtomicBoolean expired = new AtomicBoolean(false);
+        CountDownLatch done = new CountDownLatch(1);
+        try {
+            client.execute(new Runnable() {
+                @Override
+                public void run() {
+                    boolean deferred = false;
+                    try {
+                        if (!expired.get()) {
+                            if ("aura_block_server".equals(request.name)
+                                    || "player_inventory".equals(request.name)) {
+                                net.minecraft.class_1132 server = client.method_1576();
+                                if (server == null || client.field_1687 == null || client.field_1724 == null) {
+                                    response.set(unsupported(request));
+                                } else {
+                                    final net.minecraft.class_5321<net.minecraft.class_1937> dimension =
+                                            client.field_1687.method_27983();
+                                    final java.util.UUID playerId = client.field_1724.method_5667();
+                                    server.execute(() -> {
+                                        try {
+                                            if (!expired.get()) {
+                                                response.set(serverObservation(server, dimension, playerId, request));
+                                            }
+                                        } catch (RuntimeException | LinkageError failure) {
+                                            response.set(error("capability_unavailable"));
+                                        } finally {
+                                            done.countDown();
+                                        }
+                                    });
+                                    deferred = true;
+                                }
+                            } else {
+                                response.set(dispatch(client, request));
+                            }
+                        }
+                    } catch (RuntimeException | LinkageError failure) {
+                        response.set(error("capability_unavailable"));
+                    } finally {
+                        if (!deferred) done.countDown();
+                    }
+                }
+            });
+        } catch (RuntimeException rejected) {
+            send(exchange, 503, error("client_thread_unavailable"));
+            return;
+        }
+        try {
+            if (!done.await(3, TimeUnit.SECONDS)) {
+                expired.set(true);
+                if ("action".equals(request.kind)) ACTION_OUTCOME_UNCERTAIN.set(true);
+                send(exchange, 504, error("client_thread_timeout"));
+                return;
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            expired.set(true);
+            if ("action".equals(request.kind)) ACTION_OUTCOME_UNCERTAIN.set(true);
+            send(exchange, 503, error("interrupted"));
+            return;
+        }
+        JsonObject result = response.get();
+        send(exchange, "ok".equals(result.get("status").getAsString()) ? 200 : 422, result);
+    }
+
+    private static JsonObject unsupported(Request request) {
+        JsonObject result = new JsonObject();
+        result.addProperty("schema_version", 2);
+        result.addProperty("kind", request.kind);
+        result.addProperty("name", request.name);
+        result.addProperty("status", "unsupported");
+        return result;
+    }
+
+    private static JsonObject serverObservation(net.minecraft.class_1132 server,
+            net.minecraft.class_5321<net.minecraft.class_1937> dimension,
+            java.util.UUID playerId, Request request) {
+        JsonObject result = unsupported(request);
+        result.addProperty("server_tick_before", server.method_3780());
+        net.minecraft.class_3218 level = server.method_3847(dimension);
+        boolean inventory = "player_inventory".equals(request.name);
+        Object payload = inventory ? ScenarioObservers.playerInventoryServer(server, playerId).orElse(null)
+                : ScenarioObservers.auraAtServer(level, request.x, request.y, request.z).orElse(null);
+        result.addProperty("server_tick_after", server.method_3780());
+        result.addProperty("observation_source", inventory ? "integrated_server_inventory"
+                : "integrated_server_block_entity");
+        if (payload != null) {
+            result.addProperty("status", "ok");
+            result.add("result", GSON.toJsonTree(payload));
+        }
+        return result;
+    }
+
+    private static JsonObject dispatch(class_310 client, Request request) {
+        JsonObject result = new JsonObject();
+        result.addProperty("schema_version", 2);
+        result.addProperty("kind", request.kind);
+        result.addProperty("name", request.name);
+        java.util.OptionalLong before = ScenarioObservers.serverGameTick(client);
+        if (before.isPresent()) {
+            result.addProperty("server_tick_before", before.getAsLong());
+        }
+        Object payload = null;
+        if ("observe".equals(request.kind)) {
+            if ("server_tick".equals(request.name)) {
+                if (before.isPresent()) {
+                    payload = before.getAsLong();
+                }
+            } else if ("player_inventory".equals(request.name)) {
+                payload = ScenarioObservers.playerInventory(client).orElse(null);
+            } else if ("aura_block".equals(request.name)) {
+                payload = ScenarioObservers.auraAt(client, request.x, request.y, request.z).orElse(null);
+            }
+            result.addProperty("observation_source", "client_or_integrated_server_pointer");
+        } else if ("select_hotbar".equals(request.name)) {
+            payload = ScenarioActions.selectHotbar(client, request.slot, request.itemId);
+        } else if ("drop_selected".equals(request.name)) {
+            payload = ScenarioActions.dropSelected(client, request.count);
+        } else if ("aim_at_block".equals(request.name)) {
+            payload = ScenarioActions.aimAtBlock(client, request.x, request.y, request.z, request.blockId);
+        } else if ("use_item_at_block".equals(request.name)) {
+            payload = ScenarioActions.useItemAtBlock(client, request.x, request.y, request.z, request.blockId);
+        }
+        java.util.OptionalLong after = ScenarioObservers.serverGameTick(client);
+        if (after.isPresent()) {
+            result.addProperty("server_tick_after", after.getAsLong());
+        }
+        if (payload == null) {
+            result.addProperty("status", "unsupported");
+        } else {
+            result.addProperty("status", "ok");
+            result.add("result", GSON.toJsonTree(payload));
+        }
+        return result;
+    }
+
+    private static Request parse(String body) {
+        JsonObject value;
+        try {
+            JsonReader reader = new JsonReader(new StringReader(body));
+            value = strictObject(reader, true);
+            if (reader.peek() != JsonToken.END_DOCUMENT) {
+                throw new IllegalArgumentException("trailing JSON");
+            }
+        } catch (IOException | RuntimeException invalid) {
+            throw new IllegalArgumentException("invalid JSON", invalid);
+        }
+        fields(value, "schema_version", "kind", "name", "params");
+        if (!value.has("schema_version") || !"2".equals(value.get("schema_version").toString())) {
+            throw new IllegalArgumentException("schema version required");
+        }
+        String kind = string(value, "kind");
+        String name = string(value, "name");
+        if (!("observe".equals(kind) && OBSERVATIONS.contains(name)
+                || "action".equals(kind) && ACTIONS.contains(name))) {
+            throw new IllegalArgumentException("capability unavailable");
+        }
+        JsonObject params = value.has("params") && value.get("params").isJsonObject()
+                ? value.getAsJsonObject("params") : null;
+        if (params == null) {
+            throw new IllegalArgumentException("params object required");
+        }
+        Request request = new Request(kind, name);
+        if ("server_tick".equals(name) || "player_inventory".equals(name)) {
+            fields(params);
+        } else if ("drop_selected".equals(name)) {
+            fields(params, "count");
+            request.count = integer(params, "count", 1, 64);
+        } else if ("select_hotbar".equals(name)) {
+            fields(params, "slot", "item_id");
+            request.slot = integer(params, "slot", 0, 8);
+            request.itemId = registryId(params, "item_id");
+        } else {
+            if ("aura_block".equals(name) || "aura_block_server".equals(name)) {
+                fields(params, "x", "y", "z");
+            } else {
+                fields(params, "x", "y", "z", "block_id");
+            }
+            request.x = integer(params, "x", -30000000, 30000000);
+            request.y = integer(params, "y", -64, 319);
+            request.z = integer(params, "z", -30000000, 30000000);
+            if (!"aura_block".equals(name) && !"aura_block_server".equals(name)) {
+                request.blockId = registryId(params, "block_id");
+            }
+        }
+        return request;
+    }
+
+    private static JsonObject strictObject(JsonReader reader, boolean allowNested)
+            throws IOException {
+        if (reader.peek() != JsonToken.BEGIN_OBJECT) {
+            throw new IllegalArgumentException("object required");
+        }
+        JsonObject object = new JsonObject();
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String key = reader.nextName();
+            if (object.has(key)) {
+                throw new IllegalArgumentException("duplicate field");
+            }
+            JsonToken token = reader.peek();
+            if (token == JsonToken.BEGIN_OBJECT && allowNested && "params".equals(key)) {
+                object.add(key, strictObject(reader, false));
+            } else if (token == JsonToken.STRING) {
+                object.addProperty(key, reader.nextString());
+            } else if (token == JsonToken.NUMBER) {
+                object.addProperty(key, new java.math.BigDecimal(reader.nextString()));
+            } else if (token == JsonToken.BOOLEAN) {
+                object.addProperty(key, reader.nextBoolean());
+            } else {
+                throw new IllegalArgumentException("unsupported JSON value");
+            }
+        }
+        reader.endObject();
+        return object;
+    }
+
+    private static void fields(JsonObject object, String... allowed) {
+        Set<String> names = new HashSet<String>(Arrays.asList(allowed));
+        if (object.size() != names.size()) {
+            throw new IllegalArgumentException("incorrect fields");
+        }
+        for (String name : object.keySet()) {
+            if (!names.contains(name)) {
+                throw new IllegalArgumentException("unknown field");
+            }
+        }
+    }
+
+    private static String string(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException("string required");
+        }
+        return value.getAsString();
+    }
+
+    private static String registryId(JsonObject object, String name) {
+        String value = string(object, name);
+        if (value.length() > 128 || !value.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) {
+            throw new IllegalArgumentException("invalid registry id");
+        }
+        return value;
+    }
+
+    private static int integer(JsonObject object, String name, int minimum, int maximum) {
+        JsonElement value = object.get(name);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()
+                || !value.getAsString().matches("-?[0-9]{1,8}")) {
+            throw new IllegalArgumentException("integer required");
+        }
+        int number = Integer.parseInt(value.getAsString());
+        if (number < minimum || number > maximum) {
+            throw new IllegalArgumentException("integer out of range");
+        }
+        return number;
+    }
+
+    private static String readBody(HttpExchange exchange) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        InputStream input = exchange.getRequestBody();
+        byte[] buffer = new byte[1024];
+        int count;
+        while ((count = input.read(buffer)) >= 0) {
+            if (output.size() + count > MAX_BODY_BYTES) {
+                throw new IllegalArgumentException("request too large");
+            }
+            output.write(buffer, 0, count);
+        }
+        return new String(output.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    private static JsonObject error(String code) {
+        JsonObject value = new JsonObject();
+        value.addProperty("schema_version", 2);
+        value.addProperty("status", "error");
+        value.addProperty("error", code);
+        return value;
+    }
+
+    private static void send(HttpExchange exchange, int code, JsonObject body) throws IOException {
+        byte[] bytes = GSON.toJson(body).getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        exchange.sendResponseHeaders(code, bytes.length);
+        try (java.io.OutputStream output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
+    }
+
+    private static final class Request {
+        final String kind;
+        final String name;
+        int x;
+        int y;
+        int z;
+        int slot;
+        int count;
+        String itemId;
+        String blockId;
+
+        Request(String kind, String name) {
+            this.kind = kind;
+            this.name = name;
+        }
+    }
+}

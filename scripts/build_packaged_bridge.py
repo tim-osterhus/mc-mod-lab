@@ -118,6 +118,9 @@ def hardened_http(source):
                               + handler + '());\n' if route != "debug" else
                               '        addAuthenticatedContext("/debug", new StaticHandler());\n', "")
     source = replace_once(source, '        addAuthenticatedContext("/", new RootHandler());\n', "")
+    source = replace_once(source, '        addAuthenticatedContext("/api/cmd", new CmdHandler());\n',
+                          '        addAuthenticatedContext("/api/cmd", new CmdHandler());\n'
+                          '        addAuthenticatedContext("/api/scenario/v2", new ScenarioEndpoint());\n')
     anchor = '                ev.method = cmd;\n'
     check = (
         '                if (!java.util.Arrays.asList("get_world_info", "get_player_info",\n'
@@ -204,6 +207,11 @@ def build(args):
     upstream = Path(args.upstream).resolve(strict=True)
     gson = Path(args.gson).resolve(strict=True)
     mapping_file = Path(args.mappings).resolve(strict=True)
+    minecraft = Path(args.minecraft).resolve(strict=True)
+    aura = Path(args.aura).resolve(strict=True)
+    fabric_loader = Path(args.fabric_loader).resolve(strict=True)
+    datafixerupper = Path(args.datafixerupper).resolve(strict=True)
+    brigadier = Path(args.brigadier).resolve(strict=True)
     jdk_bin = Path(args.jdk_bin).resolve(strict=True)
     output = Path(args.output).absolute()
     work = Path(args.work).absolute()
@@ -232,17 +240,26 @@ def build(args):
         transformed = hardened_http(text) if name == "McpHttpServer.java" else mapped_input(text, mappings)
         path.write_text(transformed, encoding="utf-8")
         sources.append(path)
+    for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java"):
+        sources.append(ROOT / "bridge-src/xyz/langyo/minecraft/mcp/common" / name)
+    sources.append(ROOT / "bridge-src/ScenarioActions.java")
+    for source in sources:
+        if not source.is_file():
+            raise ValueError("typed bridge source missing: " + source.name)
     classes = work / "packaged-classes"
     classes.mkdir()
     javac = jdk_bin / "javac.exe"
     jar = jdk_bin / "jar.exe"
-    subprocess.run([str(javac), "-J-Xmx256m", "--release", "8", "-proc:none", "-cp",
-                    str(alpha) + ";" + str(gson), "-d", str(classes), *map(str, sources)], check=True)
+    classpath = ";".join(map(str, (alpha, gson, minecraft, aura,
+                                   fabric_loader, datafixerupper, brigadier)))
+    subprocess.run([str(javac), "-J-Xmx512m", "--release", "21", "-proc:none", "-cp",
+                    classpath, "-d", str(classes), *map(str, sources)], check=True)
     shutil.copy2(alpha, output)
     subprocess.run([str(jar), "uf", str(output), "-C", str(classes),
                     "xyz/langyo/minecraft/mcp/common"], check=True)
     with zipfile.ZipFile(output) as archive:
-        for name in ("McpHttpServer", "ReflectedInputHandler"):
+        for name in ("McpHttpServer", "ReflectedInputHandler", "ScenarioEndpoint",
+                     "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers"):
             if not archive.read("xyz/langyo/minecraft/mcp/common/" + name + ".class"):
                 raise ValueError("packaged class missing from derivative")
     return digest(output)
@@ -250,7 +267,8 @@ def build(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("upstream", "gson", "mappings", "jdk-bin", "output", "work"):
+    for name in ("upstream", "gson", "mappings", "jdk-bin", "output", "work",
+                 "minecraft", "aura", "fabric-loader", "datafixerupper", "brigadier"):
         parser.add_argument("--" + name, required=True)
     try:
         print("Public packaged bridge SHA-256: " + build(parser.parse_args()))

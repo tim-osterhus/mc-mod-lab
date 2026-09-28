@@ -638,6 +638,8 @@ def fixture_create(seed, root, fixture_id, world_name):
         raise LabError("fixture id must be lowercase hyphenated")
     if not seed.is_dir() or seed.is_symlink():
         raise LabError("seed must be a real directory")
+    if any((path / ".mc-mod-lab-uncertain").exists() for path in (seed, *seed.parents)):
+        raise LabError("seed belongs to an uncertain action profile; use a clean seed")
     if (root.resolve() == seed.resolve() or root.resolve() in seed.resolve().parents
             or seed.resolve() in root.resolve().parents or root.is_symlink()):
         raise LabError("fixture root and seed must be separate real directories")

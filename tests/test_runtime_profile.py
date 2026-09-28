@@ -102,6 +102,30 @@ class RuntimeProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(lab.LabError, "launcher argument template"):
             runtime_profile.prepare(self.manifest_file, self.root / "prepared")
 
+    def test_development_classpath_or_wrong_main_class_is_rejected(self):
+        original = [json.loads(line) for line in self.args.read_text(encoding="utf-8").splitlines()]
+        knot_client = "net.fabricmc.loader.impl.launch.knot.KnotClient"
+        cases = [
+            ("dev-classpath", "launcher classpath contains a development output path"),
+            ("wrong-main", "launcher template must use one packaged Fabric KnotClient"),
+        ]
+        for mutation, reason in cases:
+            with self.subTest(mutation=mutation):
+                args = list(original)
+                if mutation == "dev-classpath":
+                    args[args.index("-cp") + 1] = str(
+                        self.root / "run" / "mods" / "fabric-loader-0.19.1.jar")
+                else:
+                    args[args.index(knot_client)] = "net.fabricmc.devlaunchinjector.Main"
+                self.args.write_text("\n".join(json.dumps(item) for item in args) + "\n",
+                                     encoding="utf-8")
+                self.manifest["launcher_args_sha256"] = lab.sha256(self.args)
+                self.save()
+                out = self.root / ("prepared-" + mutation)
+                with self.assertRaisesRegex(lab.LabError, reason):
+                    runtime_profile.prepare(self.manifest_file, out)
+                self.assertFalse(out.exists())
+
     def test_launch_preflight_rejects_wrong_scenario_before_spawn(self):
         runtime_profile.prepare(self.manifest_file, self.root / "prepared")
         scenario = {"schema_version": 2, "id": "smoke", "fixture": "wrong-fixture",

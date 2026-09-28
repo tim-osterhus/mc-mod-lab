@@ -99,6 +99,8 @@ def prepare(manifest_path, out):
     seed = Path(manifest["seed_save"])
     if not seed.is_absolute() or not seed.is_dir() or seed.is_symlink() or not (seed / "level.dat").is_file():
         raise lab.LabError("runtime seed must be a closed local Minecraft save")
+    if any((path / ".mc-mod-lab-uncertain").exists() for path in (seed, *seed.parents)):
+        raise lab.LabError("runtime seed belongs to an uncertain action profile; use a clean seed")
     if out.resolve() == seed.resolve() or out.resolve().is_relative_to(seed.resolve()):
         raise lab.LabError("runtime output cannot be inside seed save")
     roles = [item["role"] for item in manifest["mods"]]
@@ -128,7 +130,7 @@ def prepare(manifest_path, out):
             raise lab.LabError("copied runtime mod hash mismatch", "fail")
     (game / "options.txt").write_text(
         "onboardAccessibility:false\nrenderDistance:4\nsimulationDistance:5\n"
-        "maxFps:30\nenableVsync:false\n", encoding="utf-8")
+        "maxFps:30\nenableVsync:false\npauseOnLostFocus:false\n", encoding="utf-8")
     args = _launcher_args(template, game, world.name, out / "quickPlay.json")
     (out / "java.args").write_text(args, encoding="utf-8")
     result = {"schema_version": 1, "status": "prepared_not_launched", "created_at": lab.now(),

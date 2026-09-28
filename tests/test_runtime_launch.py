@@ -187,12 +187,59 @@ class RuntimeLaunchTests(unittest.TestCase):
             spawn.assert_not_called()
 
     def test_private_diagnostic_pass_is_not_reported_as_public_pass(self):
-        result, observed = self.launch_with_stubs()
+        with patch.object(runtime_launch, "_probe_public_bridge") as probe:
+            result, observed = self.launch_with_stubs()
+        probe.assert_not_called()
         self.assertEqual(result["scenario_status"], "pass")
         self.assertEqual(result["status"], "diagnostic_only")
         self.assertEqual(observed["expected_port"], 9875)
         self.assertEqual(observed["popen_kwargs"]["env"]["MC_MCP_PORT"], "9875")
         self.assertIn("CANARY_CREDENTIAL", (self.profile / "java.args").read_text(encoding="utf-8"))
+
+    def test_public_bridge_probe_accepts_the_two_expected_denials(self):
+        expected_command_denial = {"error": "command is not in public allowlist"}
+        expected_envelope_denial = {"error": "invalid public request envelope"}
+        http_json = Mock(side_effect=[expected_command_denial, expected_envelope_denial])
+        with patch.object(lab, "http_json", http_json):
+            result = runtime_launch._probe_public_bridge({"port": 9875})
+        self.assertEqual(result, {
+            "status": "pass",
+            "denied": ["execute_command", "extra_top_level_parameter"],
+        })
+        self.assertEqual(http_json.call_count, 2)
+        first = http_json.call_args_list[0].args
+        self.assertEqual(first[0:2], (9875, "/api/cmd"))
+        self.assertEqual(first[2], {"cmd": "execute_command", "params": {"command": "say forbidden"}})
+        second = http_json.call_args_list[1].args
+        self.assertEqual(second[0:2], (9875, "/api/cmd"))
+        self.assertEqual(second[2], {
+            "cmd": "get_world_info", "params": {}, "command": "say forbidden",
+        })
+
+    def test_public_bridge_probe_rejects_an_accepted_or_malformed_response(self):
+        cases = [
+            ([{"result": "command executed"}], "public bridge exposed generic command execution"),
+            ([{"error": "command is not in public allowlist"},
+              {"result": "malformed envelope accepted"}],
+             "public bridge accepted an unreviewed request envelope"),
+        ]
+        for responses, reason in cases:
+            with self.subTest(reason=reason):
+                with patch.object(lab, "http_json", Mock(side_effect=responses)):
+                    with self.assertRaisesRegex(lab.LabError, reason):
+                        runtime_launch._probe_public_bridge({"port": 9875})
+
+    def test_public_reviewed_launch_runs_the_mocked_bridge_probe(self):
+        self.manifest["bridge_classification"] = "public_reviewed"
+        lab.write_json(self.manifest_file, self.manifest)
+        profile = self.make_profile("prepared-public")
+        scenario = self.write_scenario(profile)
+        with patch.object(runtime_launch, "_probe_public_bridge",
+                          return_value={"status": "pass"}) as probe:
+            result, _observed = self.launch_with_stubs(profile=profile, scenario_file=scenario)
+        self.assertEqual(result["public_bridge_security"], {"status": "pass"})
+        self.assertEqual(result["status"], "pass")
+        probe.assert_called_once_with({"pid": 65432})
 
     def test_child_environment_does_not_inherit_host_secrets(self):
         with patch.dict(os.environ, {"MC_MOD_LAB_TEST_SECRET": "CANARY_HOST_SECRET"}):

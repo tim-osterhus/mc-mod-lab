@@ -58,6 +58,46 @@
   "$defs": {
     "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "status": {"enum": ["pass", "fail", "inconclusive", "unsupported", "not_run"]},
+    "typed_observation": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "server_tick"],
+          "properties": {
+            "type": {"const": "server_tick"}, "server_tick": {"type": "integer", "minimum": 0},
+            "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
+            "server_tick_after": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "stack_count", "component_digests_complete", "server_tick_before", "server_tick_after"],
+          "properties": {
+            "type": {"const": "player_inventory"}, "stack_count": {"type": "integer", "minimum": 0, "maximum": 41},
+            "component_digests_complete": {"type": "boolean"}, "inventory_sha256": {"$ref": "#/$defs/hash"},
+            "server_authoritative": {"type": "boolean"}, "state_source": {"type": "string", "maxLength": 64},
+            "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
+            "server_tick_after": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "x", "y", "z", "block_id", "aura_kind", "server_authoritative", "server_tick_before", "server_tick_after", "snapshot_sha256"],
+          "properties": {
+            "type": {"enum": ["aura_block", "aura_block_server"]},
+            "x": {"type": "integer", "minimum": -30000000, "maximum": 30000000},
+            "y": {"type": "integer", "minimum": -64, "maximum": 319},
+            "z": {"type": "integer", "minimum": -30000000, "maximum": 30000000},
+            "block_id": {"type": "string", "maxLength": 128},
+            "aura_kind": {"enum": ["NODE", "PUMP", "STORAGE_BOOKSHELF", "UNKNOWN"]},
+            "server_authoritative": {"type": "boolean"}, "state_source": {"type": "string", "maxLength": 64},
+            "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
+            "server_tick_after": {"type": ["integer", "null"], "minimum": 0},
+            "snapshot_sha256": {"$ref": "#/$defs/hash"}
+          }
+        }
+      ]
+    },
     "step": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "status", "at"],
@@ -77,8 +117,31 @@
             "player_dimension": {"type": "string", "maxLength": 160},
             "action_type": {"type": "string", "maxLength": 80},
             "acknowledged": {"type": "boolean"},
+            "acknowledgement_status": {"type": "string", "maxLength": 32},
+            "server_tick_before": {"type": ["integer", "null"], "minimum": 0},
+            "server_tick_after": {"type": ["integer", "null"], "minimum": 0},
+            "ticks_elapsed": {"type": "integer", "minimum": 0, "maximum": 1200},
+            "ticks_requested": {"type": "integer", "minimum": 1, "maximum": 1200},
+            "typed_observations": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/typed_observation"}},
             "assertion": {"type": "string", "maxLength": 80},
-            "observed": {"type": ["string", "number", "boolean", "null"], "maxLength": 160}
+            "observed": {"type": ["string", "number", "boolean", "null"], "maxLength": 160},
+            "metric": {"enum": ["aura_by_color", "total_aura", "stored_power", "power", "speed"]},
+            "color": {"enum": ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"]},
+            "before_value": {"type": "number"},
+            "after_value": {"type": "number"},
+            "delta": {"type": "number"},
+            "minimum_delta": {"type": "integer", "minimum": 1, "maximum": 1000000},
+            "server_authoritative": {"type": "boolean"},
+            "x": {"type": "integer", "minimum": -30000000, "maximum": 30000000},
+            "y": {"type": "integer", "minimum": -64, "maximum": 319},
+            "z": {"type": "integer", "minimum": -30000000, "maximum": 30000000},
+            "block_id": {"type": "string", "maxLength": 128},
+            "aura_kind": {"enum": ["NODE", "PUMP", "STORAGE_BOOKSHELF", "UNKNOWN"]},
+            "before_inventory_sha256": {"$ref": "#/$defs/hash"},
+            "after_inventory_sha256": {"$ref": "#/$defs/hash"},
+            "component_digests_complete": {"type": "boolean"},
+            "expected_count_delta": {"type": "integer", "minimum": -64, "maximum": 64},
+            "actual_count_delta": {"type": "integer", "minimum": -64, "maximum": 64}
           }
         }
       }

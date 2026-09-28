@@ -34,6 +34,7 @@
   "docs/checkpoints/2026-09-22-pilot.md",
   "docs/checkpoints/2026-09-22-alpha.md",
   "docs/checkpoints/2026-09-25-v2-runner.md",
+  "docs/checkpoints/2026-09-27-typed-gameplay.md",
   "patches/PROVENANCE.md",
   "patches/minecraft-mod-mcp-v0.3.0-loopback-auth.patch",
   "patches/minecraft-mod-mcp-v0.3.0-framebuffer.patch",
@@ -42,6 +43,10 @@
   "patches/minecraft-mod-mcp-v0.3.0-dev-player.patch",
   "scripts/harden-bridge.ps1",
   "scripts/build_packaged_bridge.py",
+  "bridge-src/ScenarioActions.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/ScenarioEndpoint.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/ScenarioObservers.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/AuraScenarioObservers.java",
   "scripts/package_plugin.py",
   "scripts/plugin_smoke.py"
 ]

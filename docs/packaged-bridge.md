@@ -13,20 +13,53 @@ python scripts/build_packaged_bridge.py \
   --upstream ABSOLUTE_PINNED_RELEASE_JAR \
   --gson ABSOLUTE_GSON_2_10_1_JAR \
   --mappings ABSOLUTE_REVIEWED_1_21_1_MAPPINGS_TINY \
+  --minecraft ABSOLUTE_1_21_1_INTERMEDIARY_JAR \
+  --aura ABSOLUTE_PINNED_0_2_1_JAR \
+  --fabric-loader ABSOLUTE_FABRIC_LOADER_JAR \
+  --datafixerupper ABSOLUTE_DFU_JAR \
+  --brigadier ABSOLUTE_BRIGADIER_JAR \
   --jdk-bin ABSOLUTE_JDK21_BIN \
   --output NEW_ABSOLUTE_DERIVATIVE_JAR \
   --work NEW_ABSOLUTE_WORK_DIRECTORY
 ```
 
 The public HTTP surface binds to `127.0.0.1`, requires a per-process bearer
-token, rejects Origin-bearing requests, and exposes only status, screenshot,
-and a bounded command endpoint. The endpoint admits world/player/screen reads,
+token, rejects Origin-bearing requests, and exposes status, screenshot,
+a bounded command endpoint, and the fixed `/api/scenario/v2` typed endpoint.
+The command endpoint admits world/player/screen reads,
 four GUI controls, and control-mode entry/exit with per-command parameter
 bounds. It denies `execute_command`, and the rebuilt input handler returns an
 error even if that method were invoked internally. Calls/events/debug routes
 are not registered. The token is generated at launch, never placed in the
 manifest, scenario, or report; the client process receives only a small
 allowlist of host environment variables plus its port and token.
+
+The typed endpoint accepts only server-tick, player-inventory, and exact-coordinate
+Aura-block reads and four client actions: verified hotbar selection, bounded
+single-item drops, fixture-block aiming, and use against the verified current
+block crosshair. It rejects unknown capabilities, fields, nested values,
+duplicate JSON keys, and bodies over 4096 bytes. An action result reports
+input dispatch or rejection, not the requested world transition. The Aura
+adapter is only invoked when the Aura mod is loaded; the generic tick and
+inventory observers remain independent. `aura_block` snapshots explicitly label
+their source as the client block-entity cache, include client world game time,
+and do not claim server authority or a known per-block sync tick.
+`aura_block_server` instead schedules its read on the integrated server thread,
+reports the server tick and world time, and is the only block observer accepted
+by exact Aura assertions. Neither observer forces unloaded chunks.
+`player_inventory` likewise reads the player identified by UUID on the
+integrated server thread and binds its snapshot to the server tick. Client
+prediction alone cannot satisfy inventory conservation. Component identity
+uses item ID plus a canonical override/removal patch against the pinned registry
+defaults. Supported overrides are bounded custom data, damage, max damage, max
+stack size, repair cost, and enchantment glint override. Unknown or truncated
+component patches withhold exact aggregate digests. Raw custom data is not
+returned. Exact storage/reload proofs remain unvalidated.
+
+Actions require control mode. Their acknowledgements are not completion checks:
+scenarios must wait for normal server ticks and assert the observed transition.
+Profiles disable pause-on-lost-focus so headless orchestration does not silently
+stop the singleplayer simulation.
 
 The first packaged-client smoke used Aura Cascade Reimagined
 `0.2.1+1.21.1` with artifact SHA-256
@@ -37,8 +70,23 @@ passed loopback ownership, world/player identity, unauthenticated/Origin
 denial, forbidden-command denial, a 1280x720 in-world framebuffer capture,
 an `E` key transition to the observed Survival inventory screen, and normal
 save/exit. This is a bridge capability smoke, **not** an Aura
-gameplay parity pass. The five gameplay proofs still need typed semantic
-actions/observers and independent visual checks.
+gameplay parity pass. The five gameplay proofs still need complete typed
+assertions, sealed fixtures, and independent visual checks.
+
+A subsequent packaged run on the same target artifact used public derivative
+`26af829b9c6647580da804cedec2a74500bd803e17c37b70d1daa602c8c4d105`.
+Actual Survival crystal use charged an empty pump to 1,000 aura; a typed inventory
+comparison observed one crystal consumed and the unrelated coal unchanged.
+After a real coal drop, the elevated node reached 1,000 aura. The separate
+unfueled control remained at zero and correctly failed the positive-transfer
+assertion. Both clients saved and exited normally. This is a bounded transfer
+capability proof, not atomic network conservation, fuel-consumption accounting,
+or completion of the five shared gameplay cases.
+
+The [server-authoritative paired rerun](checkpoints/2026-09-27-typed-gameplay.md)
+uses one newer bridge for both cases and supersedes the earlier client-cache
+inventory evidence. It records exact evidence locations, tests, and remaining
+acceptance gaps.
 
 Use a reviewed local [runtime manifest example](../examples/runtime-profile.example.json)
 to prepare a fresh profile. The launcher argument file is executable input:
