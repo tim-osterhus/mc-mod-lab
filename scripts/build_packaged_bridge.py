@@ -244,7 +244,7 @@ def build(args):
         path.write_text(transformed, encoding="utf-8")
         sources.append(path)
     for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java", "GroundEntityObservers.java",
-                 "HudTraceRecorder.java", "hudmixin/HudTraceMixin.java"):
+                 "AuraAccessoryObservers.java", "HudTraceRecorder.java", "hudmixin/HudTraceMixin.java"):
         sources.append(ROOT / "bridge-src/xyz/langyo/minecraft/mcp/common" / name)
     sources.append(ROOT / "bridge-src/ScenarioActions.java")
     for source in sources:
@@ -277,7 +277,7 @@ def build(args):
     with zipfile.ZipFile(output) as archive:
         for name in ("McpHttpServer", "ReflectedInputHandler", "ScenarioEndpoint",
                      "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers", "GroundEntityObservers",
-                     "HudTraceRecorder", "hudmixin/HudTraceMixin"):
+                     "AuraAccessoryObservers", "HudTraceRecorder", "hudmixin/HudTraceMixin"):
             if not archive.read("xyz/langyo/minecraft/mcp/common/" + name + ".class"):
                 raise ValueError("packaged class missing from derivative")
     return digest(output)

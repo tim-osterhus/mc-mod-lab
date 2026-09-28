@@ -1,0 +1,527 @@
+{
+  "cleanup": "release-control",
+  "fixture": "pusher-v1",
+  "id": "pusher-positive",
+  "limits": {
+    "max_keyframes": 16,
+    "max_steps": 64,
+    "wall_seconds": 600
+  },
+  "runtime": {
+    "artifact_sha256": "2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8",
+    "kind": "prepared-packaged-client",
+    "mod_id": "aura",
+    "mod_version": "0.2.1+1.21.1"
+  },
+  "schema_version": 2,
+  "steps": [
+    {
+      "id": "settle",
+      "wait": {
+        "count": 20,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "accessories-empty",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "before",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "action": {
+        "key": "B",
+        "type": "press_key"
+      },
+      "id": "open"
+    },
+    {
+      "id": "open-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "open-screen",
+      "observe": [
+        "screen",
+        "frame"
+      ]
+    },
+    {
+      "id": "screen-confirmed",
+      "require": {
+        "equals": "AuraAccessoryScreen",
+        "type": "screen_class"
+      }
+    },
+    {
+      "action": {
+        "type": "click",
+        "x": 784,
+        "y": 494
+      },
+      "id": "pick-ring"
+    },
+    {
+      "id": "cursor-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "cursor",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": {
+            "component_sha256": "960fa31ac02c257ac931c453870fb6c5e58840f4351dbb0bc11a3b81f21563ba",
+            "count": 1,
+            "item_id": "aura:ring_of_binding"
+          },
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "action": {
+        "type": "click",
+        "x": 620,
+        "y": 280
+      },
+      "id": "equip-ring"
+    },
+    {
+      "id": "equip-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "ring-equipped",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": {
+            "component_sha256": "960fa31ac02c257ac931c453870fb6c5e58840f4351dbb0bc11a3b81f21563ba",
+            "count": 1,
+            "item_id": "aura:ring_of_binding"
+          },
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "equipped",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "equipped-frame",
+      "observe": [
+        "frame"
+      ]
+    },
+    {
+      "action": {
+        "key": "E",
+        "type": "press_key"
+      },
+      "id": "close"
+    },
+    {
+      "id": "closed-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "item": "aura:fairy_charm",
+        "slot": 0,
+        "type": "select_hotbar"
+      },
+      "id": "select-charm"
+    },
+    {
+      "id": "binding-before",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "action": {
+        "item": "aura:fairy_charm",
+        "type": "use_selected_item"
+      },
+      "id": "bind-charm"
+    },
+    {
+      "id": "bind-sync",
+      "wait": {
+        "count": 20,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "binding-after",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "charm-consumption",
+      "require": {
+        "after": "binding-after",
+        "before": "binding-before",
+        "expected_after_count": 0,
+        "expected_before_count": 1,
+        "expected_count_delta": -1,
+        "item_id": "aura:fairy_charm",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "bound-ring-proved",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": {
+            "component_sha256": "307438420020c48c04ce39a57909cc665fcddab58ab88fdc1d9d5f4a8abe24bd",
+            "count": 1,
+            "item_id": "aura:ring_of_binding"
+          },
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "effect",
+      "wait": {
+        "count": 60,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "after",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "impulse",
+      "require": {
+        "after": "after",
+        "before": "before",
+        "entity_id": "minecraft:zombie",
+        "expected_distance": 2,
+        "maximum_speed": 1,
+        "minimum_speed": 0.5,
+        "type": "stationary_entity_impulse"
+      }
+    },
+    {
+      "action": {
+        "key": "B",
+        "type": "press_key"
+      },
+      "id": "reopen"
+    },
+    {
+      "id": "reopen-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "type": "click",
+        "x": 620,
+        "y": 280
+      },
+      "id": "take-ring"
+    },
+    {
+      "id": "remove-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "removed-to-cursor",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": {
+            "component_sha256": "307438420020c48c04ce39a57909cc665fcddab58ab88fdc1d9d5f4a8abe24bd",
+            "count": 1,
+            "item_id": "aura:ring_of_binding"
+          },
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "action": {
+        "type": "click",
+        "x": 784,
+        "y": 494
+      },
+      "id": "return-ring"
+    },
+    {
+      "id": "return-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "removed-empty-cursor",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "returned",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "returned-frame",
+      "observe": [
+        "frame"
+      ]
+    },
+    {
+      "action": {
+        "key": "E",
+        "type": "press_key"
+      },
+      "id": "close-final"
+    },
+    {
+      "id": "close-final-sync",
+      "wait": {
+        "count": 10,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "ring-conserved",
+      "require": {
+        "after": "returned",
+        "before": "binding-after",
+        "expected_after_count": 1,
+        "expected_before_count": 0,
+        "expected_component_sha256": "307438420020c48c04ce39a57909cc665fcddab58ab88fdc1d9d5f4a8abe24bd",
+        "expected_count_delta": 1,
+        "item_id": "aura:ring_of_binding",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "action": {
+        "pressed": true,
+        "type": "set_forward"
+      },
+      "id": "walk-forward"
+    },
+    {
+      "id": "walk-to-control-cell",
+      "wait": {
+        "count": 120,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "pressed": false,
+        "type": "set_forward"
+      },
+      "id": "stop-walking"
+    },
+    {
+      "id": "settle-control-cell",
+      "wait": {
+        "count": 20,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "off-at-second-target",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "second-before",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "removed-control",
+      "wait": {
+        "count": 60,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "second-after",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "removed-zero-impulse",
+      "require": {
+        "after": "second-after",
+        "before": "second-before",
+        "entity_id": "minecraft:zombie",
+        "expected_distance": 2,
+        "maximum_speed": 0.001,
+        "minimum_speed": 0,
+        "type": "stationary_entity_impulse"
+      }
+    },
+    {
+      "id": "still-off",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "removal-context",
+      "observe": [
+        "frame"
+      ]
+    }
+  ]
+}

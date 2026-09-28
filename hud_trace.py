@@ -34,7 +34,16 @@ def validate_capture(capture, *, require_value_transitions=False, **kwargs):
     missing = [pair for pair in changes if not set(pair) <= retained]
     if require_value_transitions and missing:
         raise ValueError("value transitions lack adjacent before/after keyframes")
+    def visual_key(frame):
+        target = frame.get("target")
+        return (target.get("clientWhiteAura") if isinstance(target, dict) else None,
+                frame["valueRoi"]["rgbSha256"])
+    retained_states = {visual_key(frame) for frame in frames if frame["sequence"] in retained}
+    unrepresented = sum(visual_key(frame) not in retained_states for frame in frames)
+    if require_value_transitions and unrepresented:
+        raise ValueError("rendered value ROI states lack an exact retained PNG")
     result.update(value_changes=len(changes), retained_value_pairs=len(changes) - len(missing),
+                  unrepresented_value_frames=unrepresented,
                   png_integrity="not_checked")
     return result
 

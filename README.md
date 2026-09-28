@@ -6,8 +6,9 @@ Start with [setup and rebuild instructions](docs/setup.md), or run the
 [portable offline example](docs/evidence.md) before preparing a client.
 The [alpha acceptance record](docs/checkpoints/2026-09-22-alpha.md) covers the
 independent second vanilla fixture and isolated plugin installation.
-The [v2 checkpoint](docs/checkpoints/2026-09-25-v2-runner.md) separates a real
-packaged-client bridge smoke from the Aura gameplay proofs still to run.
+The [first-slice acceptance record](docs/checkpoints/2026-09-27-five-proof-slice.md)
+covers five bounded exact-artifact Aura harness cases and their controls.
+It does not claim full mod parity, autonomous Survival or general visual approval.
 The [packaged bridge guide](docs/packaged-bridge.md) documents its pinned build
 and security boundary.
 

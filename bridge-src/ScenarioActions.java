@@ -109,11 +109,33 @@ public final class ScenarioActions {
                 "vanilla single-item drop input was invoked; observe the ground and inventory separately");
     }
 
+    public static ActionAck useSelectedItem(class_310 client, String verifiedItemId) {
+        ActionAck unavailable = requireClient(client, "use_selected_item", true);
+        if (unavailable != null) return unavailable;
+        class_2960 itemId = parseRegistryId(verifiedItemId);
+        class_1799 held = client.field_1724.method_31548().method_7391();
+        if (itemId == null || held == null || held.method_7960()
+                || held.method_7909() != class_7923.field_41178.method_17966(itemId).orElse(null)) {
+            return rejected("use_selected_item", "verified item is not held in the main hand");
+        }
+        client.field_1761.method_2919(client.field_1724, class_1268.field_5808);
+        return dispatched("use_selected_item", 1,
+                "vanilla main-hand item-use invoked; observe server consumption and effects after normal ticks");
+    }
+
     public static ActionAck setCrouch(class_310 client, boolean pressed) {
         ActionAck unavailable = requireClient(client, "set_crouch", true);
         if (unavailable != null) return unavailable;
         client.field_1690.field_1832.method_23481(pressed);
         return dispatched("set_crouch", 1, "vanilla crouch key state changed; observe server state after normal ticks");
+    }
+
+    public static ActionAck setForward(class_310 client, boolean down) {
+        ActionAck unavailable = requireClient(client, "set_forward", true);
+        if (unavailable != null) return unavailable;
+        client.field_1690.field_1894.method_23481(down);
+        return dispatched("set_forward", 1,
+                "vanilla forward key state changed; observe server state after normal ticks");
     }
 
     public static void releaseHeldInputs() {
@@ -122,9 +144,11 @@ public final class ScenarioActions {
             throw new IllegalStateException("client unavailable for input release");
         }
         Runnable release = () -> {
+            client.field_1690.field_1894.method_23481(false);
             client.field_1690.field_1832.method_23481(false);
-            if (client.field_1690.field_1832.method_1434()) {
-                throw new IllegalStateException("crouch input release was not confirmed");
+            if (client.field_1690.field_1894.method_1434()
+                    || client.field_1690.field_1832.method_1434()) {
+                throw new IllegalStateException("forward/crouch input release was not confirmed");
             }
         };
         if (client.method_18854()) {

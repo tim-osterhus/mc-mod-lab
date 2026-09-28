@@ -70,6 +70,8 @@
     },
     "typed_observation": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type"],
+         "properties": {"type": {"const": "aura_accessories"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "radius"],
          "properties": {"type": {"const": "ground_entities"}, "radius": {"type": "integer", "minimum": 1, "maximum": 16}}},
         {
@@ -122,12 +124,14 @@
     },
     "action": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "item"],
+         "properties": {"type": {"const": "use_selected_item"}, "item": {"$ref": "#/$defs/registry_id"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "seconds", "x", "y", "z"],
          "properties": {"type": {"const": "capture_hud_trace"}, "seconds": {"type": "integer", "minimum": 10, "maximum": 20},
            "trigger": {"const": "drop_selected"},
            "x": {"$ref": "#/$defs/x"}, "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "pressed"],
-         "properties": {"type": {"const": "set_crouch"}, "pressed": {"type": "boolean"}}},
+         "properties": {"type": {"enum": ["set_crouch", "set_forward"]}, "pressed": {"type": "boolean"}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "key"],
@@ -183,6 +187,18 @@
         }
       ]
     },
+    "accessory_slots": {
+      "type": "object", "additionalProperties": false,
+      "required": ["amulet", "ring1", "ring2", "belt", "cursor"],
+      "properties": {"amulet": {"$ref": "#/$defs/accessory_item"}, "ring1": {"$ref": "#/$defs/accessory_item"},
+        "ring2": {"$ref": "#/$defs/accessory_item"}, "belt": {"$ref": "#/$defs/accessory_item"},
+        "cursor": {"$ref": "#/$defs/accessory_item"}}
+    },
+    "accessory_item": {"oneOf": [{"type": "null"}, {
+      "type": "object", "additionalProperties": false, "required": ["item_id", "count", "component_sha256"],
+      "properties": {"item_id": {"$ref": "#/$defs/registry_id"}, "count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "component_sha256": {"$ref": "#/$defs/hash"}}
+    }]},
     "wait": {
       "type": "object", "additionalProperties": false,
       "required": ["type", "count"],
@@ -190,9 +206,12 @@
     },
     "require": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "slots"],
+         "properties": {"type": {"const": "accessory_slots"}, "slots": {"$ref": "#/$defs/accessory_slots"}}},
         {"type": "object", "additionalProperties": false,
          "required": ["type", "before", "after", "entity_id", "minimum_speed", "maximum_speed"],
          "properties": {"type": {"const": "stationary_entity_impulse"},
+           "expected_distance": {"type": "number", "minimum": 0.1, "maximum": 16},
            "before": {"$ref": "#/$defs/id"}, "after": {"$ref": "#/$defs/id"}, "entity_id": {"$ref": "#/$defs/registry_id"},
            "minimum_speed": {"type": "number", "minimum": 0, "maximum": 4},
            "maximum_speed": {"type": "number", "minimum": 0, "maximum": 4}}},
@@ -251,6 +270,7 @@
             "type": {"const": "inventory_conservation"}, "before": {"$ref": "#/$defs/id"}, "after": {"$ref": "#/$defs/id"},
             "item_id": {"$ref": "#/$defs/registry_id"},
             "expected_count_delta": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "expected_component_sha256": {"$ref": "#/$defs/hash"},
             "expected_before_count": {"type": "integer", "minimum": 0, "maximum": 4096},
             "expected_after_count": {"type": "integer", "minimum": 0, "maximum": 4096},
             "pickup_item_id": {"$ref": "#/$defs/registry_id"}

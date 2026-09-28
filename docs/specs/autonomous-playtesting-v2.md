@@ -1,8 +1,11 @@
 # Autonomous playtesting v2: bounded scenario slice
 
-Status: partially implemented; see [scenario-v2.md](../scenario-v2.md) for the
-actual supported CLI, and treat milestones 1-3 as incomplete until their live
-acceptance evidence exists. Target: Minecraft 1.21.1 Fabric first, with Aura
+Status: the bounded milestones 1-3 first slice is accepted; see the
+[five-case evidence record](../checkpoints/2026-09-27-five-proof-slice.md).
+Broader illustrative semantic actions below remain unsupported unless explicitly
+listed in [scenario-v2.md](../scenario-v2.md). Milestone 4 is pending next;
+milestone 5 remains later/deferred. The full spec is not yet implemented.
+Target: Minecraft 1.21.1 Fabric first, with Aura
 Cascade Reimagined as the first case study. This document
 specifies reusable Mod Lab engineering. The Aura-specific execution plan and
 coverage ledger live in the Aura working tree at

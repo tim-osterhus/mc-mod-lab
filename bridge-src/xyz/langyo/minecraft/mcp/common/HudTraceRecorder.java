@@ -92,6 +92,7 @@ public final class HudTraceRecorder {
             boolean transition = trace.previous == null || !sameTarget(trace.previous.target, target)
                     || (trace.previous.target != null && target != null
                         && !java.util.Objects.equals(trace.previous.target.clientWhiteAura, target.clientWhiteAura))
+                    || !trace.previous.valueRoi.rgbSha256.equals(value.rgbSha256)
                     || (trace.previous.valueRoi.whiteCandidatePixels == 0) != (value.whiteCandidatePixels == 0)
                     || trace.previous.screenOpen != frame.screenOpen || trace.previous.hideGui != frame.hideGui
                     || trace.previous.debugVisible != frame.debugVisible;

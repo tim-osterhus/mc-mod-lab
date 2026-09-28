@@ -133,6 +133,15 @@ public final class ScenarioObservers {
         }
     }
 
+    static Object accessories(net.minecraft.class_1132 server, java.util.UUID playerId) {
+        if (!FabricLoader.getInstance().isModLoaded("aura")) return null;
+        try {
+            return AuraAccessoryObservers.observe(server, playerId).orElse(null);
+        } catch (NoClassDefFoundError | NoSuchMethodError incompatibleAura) {
+            return null;
+        }
+    }
+
     private static boolean appendStacks(List<ItemSnapshot> output, List<class_1799> stacks, String section) {
         for (int slot = 0; slot < stacks.size(); slot++) {
             class_1799 stack = stacks.get(slot);

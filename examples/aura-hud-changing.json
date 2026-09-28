@@ -1,0 +1,340 @@
+{
+  "cleanup": "release-control",
+  "fixture": "hud-v1",
+  "id": "hud-dynamic",
+  "limits": {
+    "max_keyframes": 4,
+    "max_steps": 64,
+    "wall_seconds": 600
+  },
+  "runtime": {
+    "artifact_sha256": "2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8",
+    "kind": "prepared-packaged-client",
+    "mod_id": "aura",
+    "mod_version": "0.2.1+1.21.1"
+  },
+  "schema_version": 2,
+  "steps": [
+    {
+      "id": "empty",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "inventory-before",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "aim_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "aim"
+    },
+    {
+      "id": "aim-sync",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "item": "aura:aura_crystal_white",
+        "slot": 0,
+        "type": "select_hotbar"
+      },
+      "id": "select-crystals"
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-0"
+    },
+    {
+      "id": "crystal-sync-0",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-1"
+    },
+    {
+      "id": "crystal-sync-1",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-2"
+    },
+    {
+      "id": "crystal-sync-2",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-3"
+    },
+    {
+      "id": "crystal-sync-3",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-4"
+    },
+    {
+      "id": "crystal-sync-4",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-5"
+    },
+    {
+      "id": "crystal-sync-5",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-6"
+    },
+    {
+      "id": "crystal-sync-6",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-7"
+    },
+    {
+      "id": "crystal-sync-7",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-8"
+    },
+    {
+      "id": "crystal-sync-8",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-9"
+    },
+    {
+      "id": "crystal-sync-9",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-10"
+    },
+    {
+      "id": "crystal-sync-10",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "action": {
+        "block_id": "aura:aura_node_pump",
+        "type": "use_item_at_block",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "crystal-11"
+    },
+    {
+      "id": "crystal-sync-11",
+      "wait": {
+        "count": 5,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "charged",
+      "observe": [
+        {
+          "type": "aura_block_server",
+          "x": 0,
+          "y": 161,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "id": "inventory-after",
+      "observe": [
+        {
+          "type": "player_inventory"
+        }
+      ]
+    },
+    {
+      "id": "charge-proved",
+      "require": {
+        "after": "charged",
+        "before": "empty",
+        "metric": "total_aura",
+        "minimum_delta": 12000,
+        "type": "aura_increase"
+      }
+    },
+    {
+      "id": "crystals-consumed",
+      "require": {
+        "after": "inventory-after",
+        "before": "inventory-before",
+        "expected_after_count": 0,
+        "expected_before_count": 12,
+        "expected_count_delta": -12,
+        "item_id": "aura:aura_crystal_white",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "action": {
+        "item": "minecraft:coal",
+        "slot": 1,
+        "type": "select_hotbar"
+      },
+      "id": "select-coal"
+    },
+    {
+      "action": {
+        "seconds": 14,
+        "trigger": "drop_selected",
+        "type": "capture_hud_trace",
+        "x": 0,
+        "y": 161,
+        "z": 0
+      },
+      "id": "changing"
+    },
+    {
+      "id": "still-survival",
+      "observe": [
+        "player"
+      ]
+    },
+    {
+      "id": "neutral",
+      "require": {
+        "equals": false,
+        "type": "player_crouching"
+      }
+    }
+  ]
+}

@@ -55,7 +55,7 @@ class GroundEntitiesTests(unittest.TestCase):
         with self.assertRaises(lab.LabError):
             self.parse()
 
-    def impulse(self, mutate=None, minimum=0.5, maximum=1.0):
+    def impulse(self, mutate=None, minimum=0.5, maximum=1.0, **kwargs):
         before = self.parse()
         before["entities"][0]["velocity"] = {"x": 0, "y": 0, "z": 0}
         after = self.parse()
@@ -65,7 +65,7 @@ class GroundEntitiesTests(unittest.TestCase):
         observations = {name: {("ground_entities", 6): {"value": value}}
                         for name, value in (("before", before), ("after", after))}
         return scenario_v2._assert_entity_impulse({"before": "before", "after": "after",
-                    "entity_id": "minecraft:pig", "minimum_speed": minimum, "maximum_speed": maximum}, observations)
+                    "entity_id": "minecraft:pig", "minimum_speed": minimum, "maximum_speed": maximum, **kwargs}, observations)
 
     def test_stationary_outward_impulse(self):
         self.assertAlmostEqual(self.impulse()["observed"], 0.7)
@@ -87,6 +87,11 @@ class GroundEntitiesTests(unittest.TestCase):
     def test_changed_target_refuses_impulse_comparison(self):
         with self.assertRaises(lab.LabError):
             self.impulse(lambda value: value["entities"][0].update(entity_key="f" * 64))
+
+    def test_declared_distance_is_measured_not_assumed(self):
+        with self.assertRaises(lab.LabError):
+            self.impulse(expected_distance=2)
+        self.assertAlmostEqual(self.impulse(expected_distance=0.70710678)["observed_distance"], 0.70710678)
 
 
 if __name__ == "__main__":

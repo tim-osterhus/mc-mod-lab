@@ -73,6 +73,15 @@
     "status": {"enum": ["pass", "fail", "inconclusive", "unsupported", "not_run"]},
     "typed_observation": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false,
+         "required": ["type", "server_authoritative", "server_tick", "player_key", "slots"],
+         "properties": {"type": {"const": "aura_accessories"}, "server_authoritative": {"const": true},
+           "server_tick": {"type": "integer", "minimum": 0}, "player_key": {"$ref": "#/$defs/hash"},
+           "slots": {"type": "object", "additionalProperties": false,
+             "required": ["amulet", "ring1", "ring2", "belt", "cursor"],
+             "properties": {"amulet": {"$ref": "#/$defs/accessory_item"}, "ring1": {"$ref": "#/$defs/accessory_item"},
+               "ring2": {"$ref": "#/$defs/accessory_item"}, "belt": {"$ref": "#/$defs/accessory_item"},
+               "cursor": {"$ref": "#/$defs/accessory_item"}}}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "server_authoritative", "server_tick", "radius", "dimension", "player_position", "entities"],
@@ -146,6 +155,7 @@
         }
       ]
     },
+    "accessory_item": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/storage_item"}]},
     "vector": {
       "type": "object", "additionalProperties": false, "required": ["x", "y", "z"],
       "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}
@@ -199,6 +209,8 @@
             "assertion": {"type": "string", "maxLength": 80},
             "observed": {"type": ["string", "number", "boolean", "null"], "maxLength": 160},
             "entity_key": {"$ref": "#/$defs/hash"},
+            "expected_component_sha256": {"$ref": "#/$defs/hash"},
+            "observed_distance": {"type": "number", "minimum": 0, "maximum": 16},
             "minimum_speed": {"type": "number", "minimum": 0, "maximum": 4},
             "maximum_speed": {"type": "number", "minimum": 0, "maximum": 4},
             "metric": {"enum": ["aura_by_color", "total_aura", "stored_power", "power", "speed"]},

@@ -123,4 +123,6 @@ bounded per-render framebuffer evidence and an independent structural validator.
 `capture_hud_trace` collects evidence; its successful action/report is not a
 visual verdict. Use `hud_trace.validate_capture` with the declared fixture
 identity before independent PNG calibration and visual review. Pusher and HUD
-acceptance remain incomplete; three of five shared gameplay proofs are accepted.
+acceptance status is recorded in that checkpoint: HUD is now independently
+accepted in its fixed scope. The [five-proof first slice](checkpoints/2026-09-27-five-proof-slice.md)
+also records independent Pusher equip/removal acceptance and remaining limits.

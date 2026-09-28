@@ -17,9 +17,9 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities", "hud_batch"}
-SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch", "hud_start", "hud_stop"}
-SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer", "stationary_entity_impulse"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "hud_batch"}
+SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop"}
+SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer", "stationary_entity_impulse", "accessory_slots"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
 REGISTRY_ID = re.compile(r"^[a-z0-9_.-]+:[a-z0-9_./-]+$")
@@ -269,6 +269,8 @@ def _scenario_observation(identity, spec):
         params = {}
     envelope = scenario_request(identity, "observe", name, params)
     value = envelope["result"]
+    if name == "aura_accessories":
+        value = _accessory_snapshot(value, envelope)
     if name == "ground_entities":
         value = _ground_entities_snapshot(value, envelope, spec)
     if name == "aura_storage_fixture":
@@ -304,6 +306,42 @@ def _scenario_observation(identity, spec):
                     or not before <= tick <= after):
                 raise lab.LabError("server Aura snapshot tick is not bound to its observation")
     return envelope, value
+
+
+def _accessory_snapshot(value, envelope):
+    if (not isinstance(value, dict) or value.get("serverAuthoritative") is not True
+            or value.get("stateSource") != "integrated_server_aura_accessories"):
+        raise lab.LabError("accessory snapshot is not server-authoritative")
+    tick = value.get("serverTick")
+    if (isinstance(tick, bool) or not isinstance(tick, int) or tick < 0
+            or envelope.get("server_tick_before") != tick or envelope.get("server_tick_after") != tick):
+        raise lab.LabError("accessory snapshot must be atomic within one server tick")
+    try:
+        uid = str(UUID(value["playerUuid"]))
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise lab.LabError("accessory player identity unavailable") from exc
+    slots = {}
+    for name, index in (("amulet", 0), ("ring1", 1), ("ring2", 2), ("belt", 3), ("cursor", -1)):
+        slot = value.get(name)
+        if (not isinstance(slot, dict) or slot.get("slot") != name
+                or isinstance(slot.get("index"), bool) or slot.get("index") != index
+                or not isinstance(slot.get("empty"), bool)):
+            raise lab.LabError("accessory slot identity unavailable")
+        item = slot.get("item")
+        if slot["empty"]:
+            if item is not None or slot.get("exactItem") is not False:
+                raise lab.LabError("empty accessory slot contradicts item data")
+            slots[name] = None
+        else:
+            section = "menu_cursor" if name == "cursor" else "accessory"
+            if (slot.get("exactItem") is not True or not _component_complete(item)
+                    or item.get("section") != section or isinstance(item.get("slot"), bool)
+                    or item.get("slot") != index):
+                raise lab.LabError("accessory item components or slot are incomplete")
+            slots[name] = {"item_id": item["itemId"], "count": item["count"],
+                           "component_sha256": item["componentSetSha256"]}
+    return {"type": "aura_accessories", "server_authoritative": True, "server_tick": tick,
+            "player_key": hashlib.sha256(uid.encode("ascii")).hexdigest(), "slots": slots}
 
 
 def _ground_entities_snapshot(value, envelope, spec):
@@ -528,7 +566,7 @@ def _validate_action_ack(result, name):
 def _route_action(identity, action):
     name = action["type"]
     params = {key: value for key, value in action.items() if key != "type"}
-    if name == "select_hotbar":
+    if name in {"select_hotbar", "use_selected_item"}:
         params["item_id"] = params.pop("item")
     envelope = scenario_request(identity, "action", name, params)
     result = envelope["result"]
@@ -618,15 +656,20 @@ def _assert_entity_impulse(requirement, observations):
     initial_speed = math.sqrt(sum(v * v for v in left["velocity"].values()))
     outward = sum(right["velocity"][axis] * (right["position"][axis] - after["player_position"][axis])
                   for axis in ("x", "y", "z"))
+    distance = math.sqrt(sum((right["position"][axis] - after["player_position"][axis]) ** 2
+                             for axis in ("x", "y", "z")))
     evidence = {"assertion": "stationary_entity_impulse", "entity_key": right["entity_key"],
                 "before_value": initial_speed, "after_value": speed, "observed": speed,
                 "minimum_speed": requirement["minimum_speed"], "maximum_speed": requirement["maximum_speed"],
                 "server_authoritative": True}
+    if "expected_distance" in requirement:
+        evidence["observed_distance"] = distance
     valid = (before["server_tick"] < after["server_tick"] and before["dimension"] == after["dimension"]
              and before["player_position"] == after["player_position"]
              and left["entity_key"] == right["entity_key"] and left["alive"] and right["alive"]
              and left.get("health") is not None and left["health"] == right.get("health")
              and left["position"] == right["position"] and initial_speed <= 0.001
+             and ("expected_distance" not in requirement or abs(distance - requirement["expected_distance"]) <= 0.001)
              and requirement["minimum_speed"] <= speed <= requirement["maximum_speed"]
              and (requirement["minimum_speed"] == 0 or outward > 0))
     if not valid:
@@ -667,6 +710,14 @@ def _assert_storage_transfer(requirement, observations):
 
 
 def _assert_typed(identity, requirement, observations):
+    if requirement["type"] == "accessory_slots":
+        _, value = _scenario_observation(identity, {"type": "aura_accessories"})
+        evidence = {"assertion": "accessory_slots", "typed_observations": [value]}
+        if value["slots"] != requirement["slots"]:
+            error = lab.LabError("server accessory slots contradict expected exact state", "fail")
+            error.evidence = evidence
+            raise error
+        return evidence
     if requirement["type"] == "stationary_entity_impulse":
         return _assert_entity_impulse(requirement, observations)
     if requirement["type"] == "storage_transfer":
@@ -723,6 +774,8 @@ def _assert_typed(identity, requirement, observations):
     for key in set(before_groups) | set(after_groups):
         change = after_groups.get(key, 0) - before_groups.get(key, 0)
         if key[0] == requirement["item_id"]:
+            if "expected_component_sha256" in requirement and key[1] != requirement["expected_component_sha256"]:
+                raise lab.LabError("target inventory components differ from the declared exact item", "fail")
             if change:
                 changed_target_groups.append(change)
                 actual_delta += change
@@ -741,6 +794,8 @@ def _assert_typed(identity, requirement, observations):
             "expected_count_delta": requirement["expected_count_delta"],
             "actual_count_delta": actual_delta,
             "before_count": before_count, "after_count": after_count,
+            **({"expected_component_sha256": requirement["expected_component_sha256"]}
+               if "expected_component_sha256" in requirement else {}),
             **({"pickup_item_id": pickup, "pickup_count_delta": 1} if pickup is not None else {})}
     if (len(changed_target_groups) > 1 or actual_delta != requirement["expected_count_delta"]
             or ("expected_before_count" in requirement and before_count != requirement["expected_before_count"])
@@ -807,7 +862,7 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     typed_evidence.append({"type": name, "server_tick": value,
                                            "server_tick_before": envelope.get("server_tick_before"),
                                            "server_tick_after": envelope.get("server_tick_after")})
-                elif name in {"aura_pump_pair", "aura_storage_fixture", "ground_entities"}:
+                elif name in {"aura_pump_pair", "aura_storage_fixture", "ground_entities", "aura_accessories"}:
                     typed_evidence.append(value)
                 elif name == "player_inventory":
                     snapshot = _inventory_snapshot(value)

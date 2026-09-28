@@ -3,8 +3,8 @@
 `scenario run` tests a prepared, isolated, already-running Windows Fabric
 1.21.1 packaged client. `runtime prepare` and `runtime launch` add an opt-in
 owned packaged-client lifecycle, including normal save/exit and a continuously
-sampled memory guard. The five Aura proof cases in the design spec remain
-incomplete. The private diagnostic bridge used in Aura QA is not a public
+sampled memory guard. The [five-case first slice](checkpoints/2026-09-27-five-proof-slice.md)
+has bounded acceptance, not complete Aura coverage. The private diagnostic bridge used in Aura QA is not a public
 Mod Lab backend.
 
 The runtime manifest and Java argument template are **trusted, reviewed local
@@ -68,9 +68,29 @@ the only extra inventory change, for acquiring the Black Hole from the ground.
 Action acknowledgements alone do not establish gameplay semantics. PNGs stay
 `not_reviewed` until an independent visual review.
 
-Unsupported now: nearby entities, semantic movement/equip, event waits,
-per-render HUD metrics, normal save/reopen continuation, arbitrary multi-block
-conservation, and complete automation of the five Aura acceptance cases.
+The fixed storage observer, real crouch input and `runtime resume` support
+component-exact coordinator deposit/normal close/reopen/withdrawal. Nearby
+entity snapshots are server-thread, bounded to loaded chunks and 64 entities;
+they include stable identity, position and velocity. The accessory observer
+reads all four attachment slots plus cursor atomically and refuses incomplete
+item components. `accessory_slots` asserts an exact declared state. Actual equip
+uses the ordinary B screen and clicks, not a server equipment setter.
+`set_forward` holds/releases the normal forward key; it is not pathfinding.
+Normal tick waits and server position/effect checks must prove movement, and
+control cleanup synchronously releases both forward and crouch keys.
+`use_selected_item` verifies the held registry ID then invokes vanilla main-hand
+item use; it is not an interaction-outcome assertion.
+
+`capture_hud_trace` supplies bounded per-render metadata, RGB ROI hashes and
+retained PNGs. The separate `hud_trace.validate_capture` checks structure,
+timing, declared target and optional exact transition-keyframe coverage.
+Neither collector success nor structural validation grants visual approval.
+See the [HUD checkpoint](checkpoints/2026-09-27-hud-capture.md) for the fixed
+English White layout and independent review boundary.
+
+Unsupported now: pathfinding/semantic move-to-marker, event waits, general
+equipment automation, arbitrary multi-block conservation, generic component
+codecs, full autonomous Survival and automatic visual approval.
 Owned packaged launch and normal exit are available through `runtime launch`,
 not the already-running-client `scenario run` command.
 The runner stops at the first unavailable capability and leaves
@@ -102,5 +122,6 @@ probing alone does not prevent two starting profiles from selecting the same por
 Control mode uses an exclusive lock in the selected profile. Successful exit
 removes the lock. If exit is not confirmed, the report fails and leaves the
 lock in place for manual inspection; never delete it automatically or take
-control of that profile from another session. `save-exit` reports
-`unsupported` until a verified lifecycle adapter exists.
+control of that profile from another session. The scenario-level `save-exit`
+cleanup name remains unsupported; normal close and receipt-bound reopen belong
+to `runtime launch` and `runtime resume`, not the already-running-client runner.

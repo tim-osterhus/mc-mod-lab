@@ -1,0 +1,177 @@
+{
+  "cleanup": "release-control",
+  "fixture": "pusher-v1",
+  "id": "pusher-control",
+  "limits": {
+    "max_keyframes": 16,
+    "max_steps": 64,
+    "wall_seconds": 600
+  },
+  "runtime": {
+    "artifact_sha256": "2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8",
+    "kind": "prepared-packaged-client",
+    "mod_id": "aura",
+    "mod_version": "0.2.1+1.21.1"
+  },
+  "schema_version": 2,
+  "steps": [
+    {
+      "id": "settle",
+      "wait": {
+        "count": 20,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "accessories-empty",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "before",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "action": {
+        "item": "aura:fairy_charm",
+        "slot": 0,
+        "type": "select_hotbar"
+      },
+      "id": "select-charm"
+    },
+    {
+      "id": "binding-before",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "action": {
+        "item": "aura:fairy_charm",
+        "type": "use_selected_item"
+      },
+      "id": "bind-charm"
+    },
+    {
+      "id": "bind-sync",
+      "wait": {
+        "count": 20,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "binding-after",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "charm-consumption",
+      "require": {
+        "after": "binding-after",
+        "before": "binding-before",
+        "expected_after_count": 1,
+        "expected_before_count": 1,
+        "expected_count_delta": 0,
+        "item_id": "aura:fairy_charm",
+        "type": "inventory_conservation"
+      }
+    },
+    {
+      "id": "binding-refused-without-ring",
+      "require": {
+        "slots": {
+          "amulet": null,
+          "belt": null,
+          "cursor": null,
+          "ring1": null,
+          "ring2": null
+        },
+        "type": "accessory_slots"
+      }
+    },
+    {
+      "id": "effect",
+      "wait": {
+        "count": 60,
+        "type": "ticks"
+      }
+    },
+    {
+      "id": "after",
+      "observe": [
+        {
+          "type": "aura_accessories"
+        },
+        {
+          "type": "player_inventory"
+        },
+        {
+          "radius": 6,
+          "type": "ground_entities"
+        }
+      ]
+    },
+    {
+      "id": "impulse",
+      "require": {
+        "after": "after",
+        "before": "before",
+        "entity_id": "minecraft:zombie",
+        "expected_distance": 2,
+        "maximum_speed": 0.001,
+        "minimum_speed": 0,
+        "type": "stationary_entity_impulse"
+      }
+    },
+    {
+      "id": "positive-must-fail",
+      "require": {
+        "after": "after",
+        "before": "before",
+        "entity_id": "minecraft:zombie",
+        "expected_distance": 2,
+        "maximum_speed": 1,
+        "minimum_speed": 0.5,
+        "type": "stationary_entity_impulse"
+      }
+    }
+  ]
+}

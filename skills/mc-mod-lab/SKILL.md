@@ -25,9 +25,14 @@ with the plugin's `requirements.txt` when validating evidence.
    live evidence. Follow `docs/vanilla-fixture.md` for a second real fixture.
 
 For an independently prepared packaged instance, read `docs/scenario-v2.md`
-before using `lab.py scenario run`. Its current multi-step GUI support does not
-provide Aura mechanic observers, tick waits, launch/reopen, or automated visual
-approval. A private diagnostic bridge is not a supported public backend.
+before using `lab.py scenario run`, or `runtime prepare/launch/resume` for an
+owned lifecycle. The pinned public 1.21.1 bridge supports bounded server-thread
+inventory/Aura/accessory/entity observers, normal tick waits and real client
+actions, including receipt-bound storage reload. Read `docs/packaged-bridge.md`
+before rebuilding it. Never treat input dispatch as the observed outcome.
+For HUD evidence, use declared-target structural validation and separate
+independent PNG/ROI review; capture success is not visual approval.
+A private diagnostic bridge is not a supported public backend.
 Unsupported steps must remain unsupported in the report.
 
 Keep source collection portable: public URLs/timestamps or a named local evidence
@@ -37,4 +42,4 @@ the same assertion across its failing and corrected evidence. Fixture reset mean
 a fresh copy of a closed seed, never deleting the previous save. Use `docs/evidence.md`
 for validation commands and separate deterministic, client, and visual statuses.
 
-The upstream Minecraft Mod MCP v0.3.0 JAR binds all interfaces without authentication and is rejected by this toolkit. The packaged source patches are validated for a Windows Minecraft 1.21.1 Fabric dev instance, not a general production-JAR promise. Do not run arbitrary game commands or change the target mod from this skill.
+The upstream Minecraft Mod MCP v0.3.0 JAR binds all interfaces without authentication and is rejected by this toolkit. The packaged builder is pinned to reviewed Minecraft 1.21.1 Fabric intermediary mappings; other versions need separate capability proof. Five bounded Aura harness cases do not establish all-mechanics parity or autonomous Survival. Do not run arbitrary game commands or change the target mod from this skill.

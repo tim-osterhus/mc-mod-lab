@@ -105,6 +105,10 @@ class HudTraceTests(unittest.TestCase):
         result = hud_trace.validate_capture(capture, require_value_transitions=True)
         self.assertEqual((result["value_changes"], result["retained_value_pairs"]), (1, 1))
         self.assertEqual(result["visual_status"], "unreviewed")
+        capture["frames"][5]["valueRoi"]["rgbSha256"] = "c" * 64
+        with self.assertRaisesRegex(ValueError, "exact retained PNG"):
+            hud_trace.validate_capture(capture, require_value_transitions=True)
+        capture["frames"][5]["valueRoi"]["rgbSha256"] = "b" * 64
         capture["keyframes"].pop()
         with self.assertRaisesRegex(ValueError, "recorder index"):
             hud_trace.validate_capture(capture)

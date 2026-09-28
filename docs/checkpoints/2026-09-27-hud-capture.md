@@ -1,5 +1,49 @@
 # Bounded HUD capture checkpoint
 
+## Accepted bounded HUD update
+
+The independent review now accepts HUD as the fourth of five shared proofs.
+Pusher remains pending. This update supersedes the earlier pending status below.
+The RGB-sensitive reruns use bridge SHA-256
+`cea41110320b5ac5927b82ea5eff924a1e420796f94136ab68a1348eb3e8ed86`.
+They retain adjacent frames whenever the value-ROI RGB SHA changes, not the
+whole panel. The earlier numeric-only retention left three unexplained rendered
+ROI states; those are evidence gaps, not product defects or known occlusion.
+
+- `.lab-fixtures/hud-dynamic-03/scenario-evidence/hud-changing/trace.json`:
+  508 frames, 18.877 seconds, 18 numeric changes, 38 PNGs.
+- `.lab-fixtures/hud-cross-zero-03/scenario-evidence/hud-crossing/trace.json`:
+  510 frames, 18.648 seconds, 10 numeric changes, 33 PNGs.
+- `.lab-fixtures/hud-other-node-02/scenario-evidence/hud-other-node/trace.json`:
+  496 frames, 17.731 seconds, 19 PNGs, all value candidates zero after switching
+  from a charged pump to the separate empty ordinary node at (0,164,0).
+
+All 1,018 positive/crossing numeric ROI records map to retained, independently
+reviewed exact pixel patterns. Parent Pillow checks all 71 final positive PNGs,
+and both ROIs per PNG, against recorded hashes/counts. Astra-low independently
+reviewed all 30 numeric/RGB transition pairs through lossless crop sheets plus
+raw full-frame context, including first/last frames. The visible dropped coal
+in crossing-03 frame 2392 changes background pixels but leaves the 1000 glyphs
+intact. This does not establish the cause of unretained earlier frames.
+
+Seeded-zero, look-away and other-node controls also received independent visual
+review. Their older capture bridges are disclosed: static/seeded-zero/look-away
+used `b6e639567750155f294d6e2b77430ef32c496f6b68ebccd7ae644f24a3df25da`,
+and other-node used `621eba6da28edd5b88ae1c6656cb6923f2fd53e1d0e5be68bc9f3b2a91a67bb1`.
+These controls validate absence/reset, not one interchangeable global baseline.
+Final positives and controls all closed normally, code 0; no owned JVM remains
+from these captures. Peak private memory of the two final positives was
+1,702.0 and 1,635.5 MiB; other-node was 1,664.0 MiB.
+
+Independent review is recorded in the sibling Aura audit
+`docs/audits/2026-09-27-hud-visual-review.md`. The accepted scope is fixed English
+ordinary White HUD, GUI scale 2 numeric ROI and rendered buffer continuity.
+Static calibration additionally inspected scale 3, but that is not a scale-3
+changing-continuity claim. No automatic baseline approval, general OCR,
+full-screen correctness or monitor-presentation claim is made.
+
+## Earlier capture checkpoint
+
 Three of five shared gameplay proofs remain accepted: core pump, passive Black
 Hole and component-exact storage reload. This checkpoint adds real rendered
 evidence, not a fourth or fifth gameplay acceptance claim. Pusher integration

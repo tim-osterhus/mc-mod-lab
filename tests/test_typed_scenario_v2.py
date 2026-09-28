@@ -8,10 +8,53 @@ import unittest
 from unittest.mock import Mock, patch
 
 import lab
+import contracts
 import scenario_v2 as runner
 
 
 class TypedScenarioTests(unittest.TestCase):
+    def test_returned_item_must_match_declared_exact_components(self):
+        empty = {"complete": True, "server_authoritative": True, "digest": "a" * 64, "stacks": []}
+        returned = {**empty, "stacks": [{"itemId": "aura:ring_of_binding", "count": 1, "componentSetSha256": "b" * 64}]}
+        observations = {name: {("player_inventory", None, None, None): {"value": value}}
+                        for name, value in (("before", empty), ("after", returned))}
+        requirement = {"type": "inventory_conservation", "before": "before", "after": "after",
+                       "item_id": "aura:ring_of_binding", "expected_count_delta": 1,
+                       "expected_component_sha256": "b" * 64}
+        runner._assert_typed({}, requirement, observations)
+        returned["stacks"][0]["componentSetSha256"] = "c" * 64
+        with self.assertRaisesRegex(lab.LabError, "declared exact item"):
+            runner._assert_typed({}, requirement, observations)
+
+    def test_selected_item_use_verifies_registry_id_in_typed_request(self):
+        scenario = contracts.load(Path(__file__).resolve().parents[1] / "examples/scenario-v2.json")
+        action = {"type": "use_selected_item", "item": "aura:fairy_charm"}
+        scenario["steps"] = [{"id": "use", "action": action}]
+        runner.validate_scenario(scenario)
+        ack = {"result": {"action": "use_selected_item", "status": "input_dispatched", "inputCalls": 1}}
+        with patch.object(runner, "scenario_request", return_value=ack) as request:
+            runner._route_action({}, action)
+        request.assert_called_once_with({}, "action", "use_selected_item", {"item_id": "aura:fairy_charm"})
+        action["item"] = "invalid item"
+        with self.assertRaises(contracts.ContractError):
+            runner.validate_scenario(scenario)
+
+    def test_forward_action_is_boolean_input_dispatch_not_movement_completion(self):
+        scenario = contracts.load(Path(__file__).resolve().parents[1] / "examples/scenario-v2.json")
+        for pressed in (True, False):
+            action = {"type": "set_forward", "pressed": pressed}
+            scenario["steps"] = [{"id": "forward", "action": action}]
+            runner.validate_scenario(scenario)
+            ack = {"result": {"action": "set_forward", "status": "input_dispatched", "inputCalls": 1}}
+            with patch.object(runner, "scenario_request", return_value=ack) as request:
+                evidence = runner._route_action({}, action)
+            request.assert_called_once_with({}, "action", "set_forward", {"pressed": pressed})
+            self.assertEqual(evidence["acknowledgement_status"], "input_dispatched")
+        for pressed in (1, "true", None):
+            scenario["steps"][0]["action"]["pressed"] = pressed
+            with self.assertRaises(contracts.ContractError):
+                runner.validate_scenario(scenario)
+
     def test_black_hole_pickup_is_only_allowed_extra_change(self):
         def stack(item, count, digest="a" * 64):
             return {"itemId": item, "count": count, "componentSetSha256": digest}
