@@ -32,6 +32,12 @@ actions, including receipt-bound storage reload. Read `docs/packaged-bridge.md`
 before rebuilding it. Never treat input dispatch as the observed outcome.
 For HUD evidence, use declared-target structural validation and separate
 independent PNG/ROI review; capture success is not visual approval.
+For developer inspection, `screen_slots` is a client menu cache and
+`block_entity_inventory` is a bounded integrated-server read. Neither is
+player knowledge. `capture_animation` provides bounded general render PNGs
+and a contact sheet, with no automatic visual verdict. Read
+`docs/specs/2026-09-27-tool-integrations.md` for negative controls and
+`docs/mapping-lookup.md` for the offline pinned source lookup procedure.
 A private diagnostic bridge is not a supported public backend.
 Unsupported steps must remain unsupported in the report.
 

@@ -14,6 +14,13 @@ and security boundary.
 The [Fabric GameTest lane](docs/gametest.md) adds a separate pinned, headless
 in-world conservation test and XML importer. It never promotes client or visual
 coverage from a deterministic result.
+The [bounded developer-inspection and animation spec](docs/specs/2026-09-27-tool-integrations.md)
+adds client menu slots, server block-entity inventory, and short general render
+capture to scenario v2. These are developer evidence, not autonomous Survival
+sensing or automatic visual approval. [Mapping lookup](docs/mapping-lookup.md)
+remains an offline, hash-pinned build-maintenance task.
+The B01 fresh-world Survival policy still needs a separate bounded
+visible-input adapter; the new inspection outputs remain evaluator-only.
 
 ## Pinned bridge candidate and safety
 
@@ -44,7 +51,8 @@ python -m unittest discover -s tests -v
 ```
 
 Live commands use the standard library except v2 schema validation, which
-uses the pinned `jsonschema` dependency. Evidence validation and the full test
+uses the pinned `jsonschema` dependency; animation capture and validation also
+use Pillow to verify original PNGs and compose a contact sheet. Evidence validation and the full test
 suite also require `python -m pip install -r requirements.txt` in a local virtual
 environment. See [portable replay and evidence validation](docs/evidence.md) for
 the offline failing/corrected example, and the [completion ledger](docs/completion.md)

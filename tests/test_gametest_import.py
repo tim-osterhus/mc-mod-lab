@@ -124,6 +124,15 @@ class GameTestImportTests(unittest.TestCase):
         with self.assertRaises(contracts.ContractError):
             self.run_import()
 
+    def test_expected_failure_followed_by_skip_cannot_pass(self):
+        self.lifecycle.update(blocked=True, exit_code=1)
+        self.observations["blocked"] = True
+        for sample in self.samples:
+            sample.update(source=1000, target=0)
+        self.write_xml('<failure message="' + subject.EXPECTED_FAILURE + '"/><skipped/>')
+        with self.assertRaises(contracts.ContractError):
+            self.run_import()
+
     def test_xml_entities_nonfinite_and_malformed_refused(self):
         for xml in ('<!DOCTYPE x [<!ENTITY y "bad">]><testsuite/>', '<testsuite>',
                     '<testsuite><testcase name="x" time="NaN"/></testsuite>'):

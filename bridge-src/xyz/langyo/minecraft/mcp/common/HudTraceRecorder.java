@@ -29,13 +29,29 @@ public final class HudTraceRecorder {
     public static synchronized String start(class_310 client) {
         requireClientThread(client);
         if (current != null && current.active) throw new IllegalStateException("trace already active");
-        current = new Trace(renderSequence);
+        current = new Trace(renderSequence, "hud", 0);
         return current.id;
     }
 
     public static synchronized void stop(class_310 client, String traceId) {
         requireClientThread(client);
         Trace trace = requireTrace(traceId);
+        if (!"hud".equals(trace.mode)) throw new IllegalArgumentException("not a HUD trace");
+        finish(trace, "stopped");
+    }
+
+    public static synchronized String startAnimation(class_310 client, int sampleEvery) {
+        requireClientThread(client);
+        if (sampleEvery < 20 || sampleEvery > 60) throw new IllegalArgumentException("invalid sample interval");
+        if (current != null && current.active) throw new IllegalStateException("trace already active");
+        current = new Trace(renderSequence, "animation", sampleEvery);
+        return current.id;
+    }
+
+    public static synchronized void stopAnimation(class_310 client, String traceId) {
+        requireClientThread(client);
+        Trace trace = requireTrace(traceId);
+        if (!"animation".equals(trace.mode)) throw new IllegalArgumentException("not an animation trace");
         finish(trace, "stopped");
     }
 
@@ -44,7 +60,7 @@ public final class HudTraceRecorder {
         if (afterSequence < 0 || limit < 1 || limit > 32) throw new IllegalArgumentException("invalid batch bounds");
         Trace trace = requireTrace(traceId);
         List<Frame> result = trace.frames.stream().filter(f -> f.sequence > afterSequence).limit(limit).toList();
-        return new Batch(trace.id, trace.active, trace.reason, trace.failure, trace.startSequence,
+        return new Batch(trace.id, trace.mode, trace.active, trace.reason, trace.failure, trace.startSequence,
                 (trace.active ? System.nanoTime() : trace.finishedNanos) - trace.startedNanos,
                 trace.frames.size(), List.copyOf(trace.keyframes.keySet()), result);
     }
@@ -79,26 +95,31 @@ public final class HudTraceRecorder {
             int guiHeight = client.method_22683().method_4502();
             if (width < 1 || height < 1 || guiWidth < 1 || guiHeight < 1)
                 throw new IllegalStateException("invalid framebuffer dimensions");
-            Target target = target(client, delta);
-            int valueX = 6 + client.field_1772.method_1727("White Aura: ");
-            int valueY = 7 + client.field_1772.field_2000;
-            Roi panel = measure(pixels, guiWidth, guiHeight, 0, 0, 320, 176);
-            Roi value = measure(pixels, guiWidth, guiHeight, valueX, valueY, 96, client.field_1772.field_2000);
+            boolean animation = "animation".equals(trace.mode);
+            Target target = animation ? null : target(client, delta);
+            Roi panel = null, value = null;
+            if (!animation) {
+                int valueX = 6 + client.field_1772.method_1727("White Aura: ");
+                int valueY = 7 + client.field_1772.field_2000;
+                panel = measure(pixels, guiWidth, guiHeight, 0, 0, 320, 176);
+                value = measure(pixels, guiWidth, guiHeight, valueX, valueY, 96, client.field_1772.field_2000);
+            }
             Frame frame = new Frame(renderSequence, now - trace.startedNanos,
                     client.field_1687 == null ? null : client.field_1687.method_8510(),
                     width, height, guiWidth, guiHeight, client.field_1690.field_1883,
                     client.field_1755 != null, client.field_1690.field_1842,
                     client.method_53526().method_53536(), target, panel, value);
-            boolean transition = trace.previous == null || !sameTarget(trace.previous.target, target)
+            boolean transition = !animation && (trace.previous == null || !sameTarget(trace.previous.target, target)
                     || (trace.previous.target != null && target != null
                         && !java.util.Objects.equals(trace.previous.target.clientWhiteAura, target.clientWhiteAura))
                     || !trace.previous.valueRoi.rgbSha256.equals(value.rgbSha256)
                     || (trace.previous.valueRoi.whiteCandidatePixels == 0) != (value.whiteCandidatePixels == 0)
                     || trace.previous.screenOpen != frame.screenOpen || trace.previous.hideGui != frame.hideGui
-                    || trace.previous.debugVisible != frame.debugVisible;
+                    || trace.previous.debugVisible != frame.debugVisible);
             trace.frames.add(frame);
             if (transition && trace.previous != null) retain(trace, trace.previous.sequence, trace.previousPixels);
-            if (transition || now - trace.lastKeyframeNanos >= 1_000_000_000L) {
+            if (animation ? trace.frames.size() == 1 || trace.frames.size() % trace.sampleEvery == 0
+                    : transition || now - trace.lastKeyframeNanos >= 1_000_000_000L) {
                 retain(trace, frame.sequence, pixels);
                 trace.lastKeyframeNanos = now;
             }
@@ -210,6 +231,8 @@ public final class HudTraceRecorder {
     private static final class Trace {
         final String id = UUID.randomUUID().toString();
         final long startSequence, startedNanos = System.nanoTime();
+        final String mode;
+        final int sampleEvery;
         final List<Frame> frames = new ArrayList<>();
         final Map<Long, byte[]> keyframes = new LinkedHashMap<>();
         boolean active = true;
@@ -218,10 +241,14 @@ public final class HudTraceRecorder {
         int pngBytes;
         Frame previous;
         class_1011 previousPixels;
-        Trace(long startSequence) { this.startSequence = startSequence; }
+        Trace(long startSequence, String mode, int sampleEvery) {
+            this.startSequence = startSequence;
+            this.mode = mode;
+            this.sampleEvery = sampleEvery;
+        }
     }
 
-    public record Batch(String traceId, boolean active, String reason, String failure,
+    public record Batch(String traceId, String mode, boolean active, String reason, String failure,
             long startSequence, long elapsedNanos, int frameCount, List<Long> keyframeSequences, List<Frame> frames) { }
     public record Frame(long sequence, long elapsedNanos, Long clientWorldTick,
             int framebufferWidth, int framebufferHeight, int guiWidth, int guiHeight,

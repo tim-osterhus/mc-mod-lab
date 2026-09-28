@@ -166,13 +166,30 @@ def validate_scenario_report_v2(value, root, portable=False):
     for artifact in artifacts:
         artifact_path(root, artifact)
     for step in value["steps"]:
-        shot = step.get("evidence", {}).get("screenshot")
+        evidence = step.get("evidence", {})
+        shot = evidence.get("screenshot")
         if shot:
             if shot not in names:
                 raise ContractError("scenario screenshot missing from artifact inventory")
             png = artifact_path(root, artifacts[names.index(shot)]).read_bytes()
             if len(png) < 24 or png[:8] != b"\x89PNG\r\n\x1a\n":
                 raise ContractError("scenario screenshot is not PNG")
+        animation = evidence.get("animation_capture")
+        if animation:
+            import animation_trace
+            capture_name = animation["capture_file"]
+            sheet_name = animation["contact_sheet"]
+            if capture_name not in names or sheet_name not in names:
+                raise ContractError("animation evidence is missing from artifact inventory")
+            capture_path = artifact_path(root, artifacts[names.index(capture_name)])
+            artifact_path(root, artifacts[names.index(sheet_name)])
+            try:
+                capture = load(capture_path)
+                result = animation_trace.validate_capture(capture, capture_path.parent, verify_sheet=True)
+            except (OSError, ValueError, KeyError) as exc:
+                raise ContractError("animation evidence is incomplete or altered") from exc
+            if any(animation[key] != result[key] for key in result):
+                raise ContractError("animation report summary disagrees with saved frames")
     if value["status"] == "pass":
         if (value["runtime"]["status"] != "verified" or value["cleanup"]["status"] != "pass"
                 or not value["steps"] or any(step["status"] != "pass" for step in value["steps"])

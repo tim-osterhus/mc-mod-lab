@@ -88,6 +88,36 @@ Neither collector success nor structural validation grants visual approval.
 See the [HUD checkpoint](checkpoints/2026-09-27-hud-capture.md) for the fixed
 English White layout and independent review boundary.
 
+Developer inspection adds `screen_slots` for a current handled screen's bounded
+client menu cache (slot positions, item IDs/counts, component digests and hovered
+index), and `block_entity_inventory` for a loaded block entity within 16 blocks
+of the player. The latter runs on the integrated server thread, returns a fixed
+inventory shape and source/tick provenance, and refuses oversized inventories.
+Both reject unavailable state rather than returning a fabricated empty result.
+Neither exposes NBT, tooltip text, arbitrary fields or commands. A client menu
+snapshot is not server-authoritative and cannot satisfy exact inventory
+assertions. A server block-entity snapshot is developer inspection, not a
+Survival player's observed knowledge.
+
+`capture_animation` takes `seconds` (2-10), `sample_every` (20-60 rendered
+frames), and `require_motion` (boolean). It retains bounded first/sampled/last
+PNGs, complete per-render sequence metadata, hashes, and a contact sheet. The
+saved `capture.json` and sheet are report artifacts; report validation checks
+every original PNG against its frame and digest. Pixel change is only a motion
+coverage signal. A static control may be structurally complete with
+`require_motion: false`; a positive motion capture fails when static. Independent
+inspection of the images is required before any visual claim. The
+[integration spec](specs/2026-09-27-tool-integrations.md) records limits and
+negative controls. None of these tools is a navigation or planning driver.
+For B01 guide-led fresh-world Survival, the current runner can retain a
+human-operated real-client dry run but is **not ready** as an isolated
+no-cheat adaptive policy. Only framebuffer pixels and ordinary player inputs
+may cross into such a policy; typed server/client inspection and source lookup
+must stay evaluator-only. The narrow next milestone is a bounded visible-input
+adapter with mouse look, hotbar/use/attack, guide reading through pixels,
+exclusive lease and fail-safe cancellation. See the
+[B01 readiness boundary](specs/2026-09-27-tool-integrations.md#b01-survival-readiness-boundary).
+
 Unsupported now: pathfinding/semantic move-to-marker, event waits, general
 equipment automation, arbitrary multi-block conservation, generic component
 codecs, full autonomous Survival and automatic visual approval.

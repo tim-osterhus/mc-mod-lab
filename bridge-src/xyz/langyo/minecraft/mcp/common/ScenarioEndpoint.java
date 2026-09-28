@@ -27,9 +27,9 @@ public final class ScenarioEndpoint implements HttpHandler {
     private static final int MAX_BODY_BYTES = 4096;
     private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
     private static final Set<String> OBSERVATIONS = new HashSet<String>(
-            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "hud_batch", "hud_keyframe"));
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "hud_batch", "hud_keyframe"));
     private static final Set<String> ACTIONS = new HashSet<String>(
-            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop"));
+            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop", "animation_start", "animation_stop"));
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -78,6 +78,7 @@ public final class ScenarioEndpoint implements HttpHandler {
                         if (!expired.get()) {
                             if ("aura_block_server".equals(request.name)
                                     || "ground_entities".equals(request.name)
+                                    || "block_entity_inventory".equals(request.name)
                                     || "aura_accessories".equals(request.name)
                                     || "aura_storage_fixture".equals(request.name)
                                     || "aura_pump_pair".equals(request.name)
@@ -156,6 +157,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                 ? ScenarioObservers.accessories(server, playerId)
                 : "ground_entities".equals(request.name)
                 ? GroundEntityObservers.observe(server, playerId, request.radius).orElse(null)
+                : "block_entity_inventory".equals(request.name)
+                ? DeveloperInspectors.blockEntityInventory(server, level, playerId, request.x, request.y, request.z)
                 : "aura_storage_fixture".equals(request.name)
                 ? ScenarioObservers.storageFixture(server, level, playerId, request.x, request.y, request.z)
                 : "aura_pump_pair".equals(request.name)
@@ -224,6 +227,8 @@ public final class ScenarioEndpoint implements HttpHandler {
         if ("observe".equals(request.kind)) {
             if ("hud_batch".equals(request.name)) {
                 payload = HudTraceRecorder.readBatch(request.traceId, request.sequence, request.limit);
+            } else if ("screen_slots".equals(request.name)) {
+                payload = DeveloperInspectors.screenSlots(client);
             } else if ("server_tick".equals(request.name)) {
                 if (before.isPresent()) {
                     payload = before.getAsLong();
@@ -234,10 +239,14 @@ public final class ScenarioEndpoint implements HttpHandler {
                 payload = ScenarioObservers.auraAt(client, request.x, request.y, request.z).orElse(null);
             }
             result.addProperty("observation_source", "client_or_integrated_server_pointer");
-        } else if ("hud_start".equals(request.name) || "hud_stop".equals(request.name)) {
+        } else if ("hud_start".equals(request.name) || "hud_stop".equals(request.name)
+                || "animation_start".equals(request.name) || "animation_stop".equals(request.name)) {
             if (!ReflectionHelper.isMcpControlMode()) throw new IllegalStateException("control required");
             String traceId = request.traceId;
             if ("hud_start".equals(request.name)) traceId = HudTraceRecorder.start(client);
+            else if ("animation_start".equals(request.name))
+                traceId = HudTraceRecorder.startAnimation(client, request.sampleEvery);
+            else if ("animation_stop".equals(request.name)) HudTraceRecorder.stopAnimation(client, traceId);
             else HudTraceRecorder.stop(client, traceId);
             JsonObject ack = new JsonObject();
             ack.addProperty("action", request.name);
@@ -302,10 +311,15 @@ public final class ScenarioEndpoint implements HttpHandler {
         }
         Request request = new Request(kind, name);
         if ("server_tick".equals(name) || "player_inventory".equals(name)
+                || "screen_slots".equals(name)
                 || "aura_accessories".equals(name) || "hud_start".equals(name)) {
             fields(params);
-        } else if ("hud_stop".equals(name) || "hud_batch".equals(name) || "hud_keyframe".equals(name)) {
-            if ("hud_stop".equals(name)) fields(params, "trace_id");
+        } else if ("animation_start".equals(name)) {
+            fields(params, "sample_every");
+            request.sampleEvery = integer(params, "sample_every", 20, 60);
+        } else if ("hud_stop".equals(name) || "animation_stop".equals(name)
+                || "hud_batch".equals(name) || "hud_keyframe".equals(name)) {
+            if ("hud_stop".equals(name) || "animation_stop".equals(name)) fields(params, "trace_id");
             else if ("hud_batch".equals(name)) fields(params, "trace_id", "after_sequence", "limit");
             else fields(params, "trace_id", "sequence");
             request.traceId = string(params, "trace_id");
@@ -339,7 +353,8 @@ public final class ScenarioEndpoint implements HttpHandler {
             if ("aura_pump_pair".equals(name)) {
                 fields(params, "x", "y", "z", "target_y");
                 request.targetY = integer(params, "target_y", -64, 319);
-            } else if ("aura_block".equals(name) || "aura_block_server".equals(name) || "aura_storage_fixture".equals(name)) {
+            } else if ("aura_block".equals(name) || "aura_block_server".equals(name)
+                    || "aura_storage_fixture".equals(name) || "block_entity_inventory".equals(name)) {
                 fields(params, "x", "y", "z");
             } else {
                 fields(params, "x", "y", "z", "block_id");
@@ -350,7 +365,8 @@ public final class ScenarioEndpoint implements HttpHandler {
             if ("aura_pump_pair".equals(name)) {
                 if (request.targetY <= request.y || request.targetY > request.y + 15)
                     throw new IllegalArgumentException("target must be within upward fixture range");
-            } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name) && !"aura_storage_fixture".equals(name)) {
+            } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name)
+                    && !"aura_storage_fixture".equals(name) && !"block_entity_inventory".equals(name)) {
                 request.blockId = registryId(params, "block_id");
             }
         }
@@ -466,6 +482,7 @@ public final class ScenarioEndpoint implements HttpHandler {
         int z;
         int targetY;
         int radius;
+        int sampleEvery;
         int sequence;
         int limit;
         String traceId;

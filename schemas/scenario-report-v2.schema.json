@@ -74,6 +74,32 @@
     "typed_observation": {
       "oneOf": [
         {"type": "object", "additionalProperties": false,
+         "required": ["type", "screenClass", "stateSource", "serverAuthoritative", "slotCount", "hoveredIndex", "slots"],
+         "properties": {"type": {"const": "screen_slots"}, "screenClass": {"type": "string", "minLength": 1, "maxLength": 160},
+           "stateSource": {"const": "client_menu_cache"}, "serverAuthoritative": {"const": false},
+           "slotCount": {"type": "integer", "minimum": 0, "maximum": 128},
+           "hoveredIndex": {"type": ["integer", "null"], "minimum": 0, "maximum": 127},
+           "slots": {"type": "array", "maxItems": 128, "items": {"type": "object", "additionalProperties": false,
+             "required": ["index", "x", "y", "item"], "properties": {
+               "index": {"type": "integer", "minimum": 0, "maximum": 127},
+               "x": {"type": "integer", "minimum": -256, "maximum": 8192},
+               "y": {"type": "integer", "minimum": -256, "maximum": 8192},
+               "item": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/inspection_item"}]}}}}}},
+        {"type": "object", "additionalProperties": false,
+         "required": ["type", "serverTick", "stateSource", "serverAuthoritative", "dimension", "x", "y", "z", "blockId", "blockEntityId", "hasInventory", "slotCount", "slots"],
+         "properties": {"type": {"const": "block_entity_inventory"},
+           "serverTick": {"type": "integer", "minimum": 0},
+           "stateSource": {"const": "integrated_server_block_entity_inventory"}, "serverAuthoritative": {"const": true},
+           "dimension": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$", "maxLength": 128},
+           "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"},
+           "blockId": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$", "maxLength": 128},
+           "blockEntityId": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$", "maxLength": 128},
+           "hasInventory": {"type": "boolean"}, "slotCount": {"type": "integer", "minimum": 0, "maximum": 64},
+           "slots": {"type": "array", "maxItems": 64, "items": {"type": "object", "additionalProperties": false,
+             "required": ["index", "item"], "properties": {
+               "index": {"type": "integer", "minimum": 0, "maximum": 63},
+               "item": {"$ref": "#/$defs/inspection_item"}}}}}},
+        {"type": "object", "additionalProperties": false,
          "required": ["type", "server_authoritative", "server_tick", "player_key", "slots"],
          "properties": {"type": {"const": "aura_accessories"}, "server_authoritative": {"const": true},
            "server_tick": {"type": "integer", "minimum": 0}, "player_key": {"$ref": "#/$defs/hash"},
@@ -156,6 +182,14 @@
       ]
     },
     "accessory_item": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/storage_item"}]},
+    "inspection_item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["itemId", "count", "componentDigestComplete", "componentSha256"],
+      "properties": {"itemId": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$", "maxLength": 128},
+        "count": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "componentDigestComplete": {"type": "boolean"},
+        "componentSha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]}}
+    },
     "vector": {
       "type": "object", "additionalProperties": false, "required": ["x", "y", "z"],
       "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}
@@ -185,6 +219,18 @@
                 "frame_count": {"type": "integer", "minimum": 1, "maximum": 1200},
                 "keyframe_count": {"type": "integer", "minimum": 1, "maximum": 64},
                 "visual_status": {"const": "not_reviewed"}}
+            },
+            "animation_capture": {
+              "type": "object", "additionalProperties": false,
+              "required": ["capture_file", "contact_sheet", "frame_count", "keyframe_count", "motion_observed", "visual_status"],
+              "properties": {
+                "capture_file": {"type": "string", "maxLength": 180},
+                "contact_sheet": {"type": "string", "maxLength": 180},
+                "frame_count": {"type": "integer", "minimum": 1, "maximum": 1200},
+                "keyframe_count": {"type": "integer", "minimum": 1, "maximum": 64},
+                "motion_observed": {"type": "boolean"},
+                "visual_status": {"const": "not_reviewed"}
+              }
             },
             "pump_accounting": {
               "type": "object", "additionalProperties": false,

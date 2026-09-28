@@ -17,8 +17,8 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "hud_batch"}
-SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "hud_batch"}
+SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop", "animation_start", "animation_stop"}
 SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer", "stationary_entity_impulse", "accessory_slots"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
@@ -259,7 +259,7 @@ def _mark_uncertain(identity):
 
 def _scenario_observation(identity, spec):
     name = spec["type"]
-    if name in {"aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture"}:
+    if name in {"aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "block_entity_inventory"}:
         params = {key: spec[key] for key in ("x", "y", "z")}
         if name == "aura_pump_pair":
             params["target_y"] = spec["target_y"]
@@ -277,6 +277,10 @@ def _scenario_observation(identity, spec):
         value = _storage_fixture_snapshot(value, envelope, spec)
     if name == "aura_pump_pair":
         value = _pump_pair_snapshot(value, envelope, spec)
+    if name in {"screen_slots", "block_entity_inventory"}:
+        import developer_inspection
+        value = (developer_inspection.screen_slots(value, envelope) if name == "screen_slots"
+                 else developer_inspection.block_entity_inventory(value, envelope, spec))
     if name == "server_tick":
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise lab.LabError("server tick observation is unavailable")
@@ -531,7 +535,7 @@ def missing_capability(step):
     if kind == "action":
         action = step["action"]["type"]
         return ("action capability unavailable: " + action
-                if action not in SUPPORTED_ACTIONS | SCENARIO_ACTIONS | {"capture_hud_trace"} else None)
+                if action not in SUPPORTED_ACTIONS | SCENARIO_ACTIONS | {"capture_hud_trace", "capture_animation"} else None)
     if kind == "wait":
         return ("server game-tick wait capability unavailable"
                 if step["wait"]["type"] != "ticks" else None)
@@ -555,7 +559,7 @@ def _validate_action_ack(result, name):
     calls = result.get("inputCalls")
     if isinstance(calls, bool) or not isinstance(calls, int) or not 0 <= calls <= 64:
         raise lab.LabError("scenario action input count is invalid", "fail")
-    if name in {"hud_start", "hud_stop"}:
+    if name in {"hud_start", "hud_stop", "animation_start", "animation_stop"}:
         try:
             if str(UUID(result["traceId"])) != result["traceId"]:
                 raise ValueError("noncanonical trace")
@@ -862,6 +866,8 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     typed_evidence.append({"type": name, "server_tick": value,
                                            "server_tick_before": envelope.get("server_tick_before"),
                                            "server_tick_after": envelope.get("server_tick_after")})
+                elif name in {"screen_slots", "block_entity_inventory"}:
+                    typed_evidence.append({"type": name, **value})
                 elif name in {"aura_pump_pair", "aura_storage_fixture", "ground_entities", "aura_accessories"}:
                     typed_evidence.append(value)
                 elif name == "player_inventory":
@@ -924,6 +930,12 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
             result = hud_capture.capture(identity, action, out / ("hud-" + step["id"]), wall_deadline, cancel_event)
             return {"action_type": "capture_hud_trace", "acknowledged": True,
                     "hud_capture": result}, keyframes_left
+        if action["type"] == "capture_animation":
+            import animation_capture
+            result = animation_capture.capture(identity, action, out / ("animation-" + step["id"]),
+                                               wall_deadline, cancel_event)
+            return {"action_type": "capture_animation", "acknowledged": True,
+                    "animation_capture": result}, keyframes_left
         if action["type"] in SCENARIO_ACTIONS:
             evidence = _route_action(identity, action)
             return evidence, keyframes_left
@@ -981,6 +993,8 @@ def _preflight_route_observations(identity, scenario, report):
         if "wait" in step and step["wait"]["type"] == "ticks":
             specs = [*specs, {"type": "server_tick"}]
         for spec in specs:
+            if spec["type"] in {"screen_slots", "block_entity_inventory"}:
+                continue  # Availability depends on the step's current GUI/world state.
             key = _observation_key(spec)
             probes.setdefault(key, (index, spec))
     for index, spec in probes.values():
@@ -1102,7 +1116,11 @@ def run(identity_path, scenario_path, artifact_path, out, cancel_event=None):
             report["status"] = "fail"
         elif report["cleanup"]["status"] != "pass" and report["status"] == "pass":
             report["status"] = "unsupported"
-        report["artifacts"] = [{"file": path.name, "sha256": lab.sha256(path)}
+        report["artifacts"] = [{"file": path.relative_to(out).as_posix(), "sha256": lab.sha256(path)}
                                for path in sorted(out.glob("frame-*.png"))]
+        report["artifacts"] += [{"file": path.relative_to(out).as_posix(), "sha256": lab.sha256(path)}
+                                for path in sorted(out.glob("animation-*/capture.json"))]
+        report["artifacts"] += [{"file": path.relative_to(out).as_posix(), "sha256": lab.sha256(path)}
+                                for path in sorted(out.glob("animation-*/contact-sheet.png"))]
         lab.write_json(out / "report.json", report)
     return report

@@ -71,6 +71,11 @@
     "typed_observation": {
       "oneOf": [
         {"type": "object", "additionalProperties": false, "required": ["type"],
+         "properties": {"type": {"const": "screen_slots"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "x", "y", "z"],
+         "properties": {"type": {"const": "block_entity_inventory"},
+           "x": {"$ref": "#/$defs/x"}, "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type"],
          "properties": {"type": {"const": "aura_accessories"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "radius"],
          "properties": {"type": {"const": "ground_entities"}, "radius": {"type": "integer", "minimum": 1, "maximum": 16}}},
@@ -130,6 +135,12 @@
          "properties": {"type": {"const": "capture_hud_trace"}, "seconds": {"type": "integer", "minimum": 10, "maximum": 20},
            "trigger": {"const": "drop_selected"},
            "x": {"$ref": "#/$defs/x"}, "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}}},
+        {"type": "object", "additionalProperties": false,
+         "required": ["type", "seconds", "sample_every", "require_motion"],
+         "properties": {"type": {"const": "capture_animation"},
+           "seconds": {"type": "integer", "minimum": 2, "maximum": 10},
+           "sample_every": {"type": "integer", "minimum": 20, "maximum": 60},
+           "require_motion": {"type": "boolean"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "pressed"],
          "properties": {"type": {"enum": ["set_crouch", "set_forward"]}, "pressed": {"type": "boolean"}}},
         {

@@ -38,6 +38,8 @@ SOFTWARE.
 Gson (Apache-2.0) is a separately supplied compiler/runtime dependency; its JAR is
 not bundled. Python jsonschema (MIT) and its dependencies are installed separately
 from `requirements.txt`; their installed distributions carry their own notices.
+Pillow (HPND) is likewise installed separately for offline PNG verification and
+contact-sheet composition; no Pillow code or binary is bundled here.
 The bounded Aura GameTest profile also requires separately supplied Fabric API
 and its GameTest module (Apache-2.0), Fabric Loader (Apache-2.0), Patchouli, and
 the exact Aura release. They are external runtime inputs, not redistributed

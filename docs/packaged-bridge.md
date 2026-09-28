@@ -117,6 +117,12 @@ and private-byte sample guard applies per workload; it is not an OS hard cap.
 The builder is pinned to Minecraft 1.21.1 intermediary mappings. Another
 Minecraft version requires a separately reviewed mapping/build/test cycle;
 simply changing the manifest version is unsupported.
+For an offline mapping/source lookup that does not add a second backend, see
+[mapping lookup](mapping-lookup.md). The public bridge also has fixed
+`screen_slots` and `block_entity_inventory` observers and a bounded general
+animation mode, described in [scenario v2](scenario-v2.md). The authenticated
+transport, fixed allowlists and exact Minecraft 1.21.1/Aura 0.2.1 artifact
+checks still apply. These inspection views are not Survival-player knowledge.
 
 The [render-capture checkpoint](checkpoints/2026-09-27-hud-capture.md) adds
 bounded per-render framebuffer evidence and an independent structural validator.
