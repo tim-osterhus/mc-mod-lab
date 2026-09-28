@@ -5,6 +5,8 @@
   "README.md",
   "lab.py",
   "scenario_v2.py",
+  "hud_capture.py",
+  "hud_trace.py",
   "runtime_profile.py",
   "runtime_launch.py",
   "contracts.py",
@@ -43,6 +45,7 @@
   "docs/checkpoints/2026-09-27-typed-gameplay.md",
   "docs/checkpoints/2026-09-27-core-and-black-hole.md",
   "docs/checkpoints/2026-09-27-storage-reload.md",
+  "docs/checkpoints/2026-09-27-hud-capture.md",
   "patches/PROVENANCE.md",
   "patches/minecraft-mod-mcp-v0.3.0-loopback-auth.patch",
   "patches/minecraft-mod-mcp-v0.3.0-framebuffer.patch",
@@ -56,6 +59,10 @@
   "bridge-src/xyz/langyo/minecraft/mcp/common/ScenarioObservers.java",
   "bridge-src/xyz/langyo/minecraft/mcp/common/AuraScenarioObservers.java",
   "bridge-src/xyz/langyo/minecraft/mcp/common/GroundEntityObservers.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/AuraAccessoryObservers.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/HudTraceRecorder.java",
+  "bridge-src/xyz/langyo/minecraft/mcp/common/hudmixin/HudTraceMixin.java",
+  "bridge-src/mc-mod-lab-hud.mixins.json",
   "scripts/package_plugin.py",
   "scripts/plugin_smoke.py"
 ]

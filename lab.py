@@ -524,7 +524,7 @@ def validate_scenario(scenario):
         if set(params) != {"x", "y"} or any(not isinstance(params[k], int) or params[k] < 0 for k in params):
             raise LabError("click requires nonnegative integer x and y")
     elif action.get("tool") == "press_key":
-        if set(params) != {"key"} or params["key"] not in {"Enter", "Escape", "E", "Tab"}:
+        if set(params) != {"key"} or params["key"] not in {"Enter", "Escape", "E", "Tab", "B"}:
             raise LabError("press_key is outside the allowed key set")
     elif action.get("tool") == "click_button_index":
         if set(params) != {"index"} or not isinstance(params["index"], int) or not 0 <= params["index"] <= 20:

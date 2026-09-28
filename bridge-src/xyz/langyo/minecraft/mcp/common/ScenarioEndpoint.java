@@ -27,9 +27,9 @@ public final class ScenarioEndpoint implements HttpHandler {
     private static final int MAX_BODY_BYTES = 4096;
     private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
     private static final Set<String> OBSERVATIONS = new HashSet<String>(
-            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities"));
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities", "hud_batch", "hud_keyframe"));
     private static final Set<String> ACTIONS = new HashSet<String>(
-            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch"));
+            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch", "hud_start", "hud_stop"));
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -42,6 +42,18 @@ public final class ScenarioEndpoint implements HttpHandler {
             request = parse(readBody(exchange));
         } catch (IllegalArgumentException exception) {
             send(exchange, 400, error("invalid_request"));
+            return;
+        }
+        if ("hud_keyframe".equals(request.name)) {
+            try {
+                byte[] png = HudTraceRecorder.keyframe(request.traceId, request.sequence);
+                exchange.getResponseHeaders().set("Content-Type", "image/png");
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                exchange.sendResponseHeaders(200, png.length);
+                try (java.io.OutputStream output = exchange.getResponseBody()) { output.write(png); }
+            } catch (IllegalArgumentException unavailable) {
+                send(exchange, 422, error("keyframe_unavailable"));
+            }
             return;
         }
         Object instance = ReflectionHelper.getMinecraftInstance();
@@ -207,7 +219,9 @@ public final class ScenarioEndpoint implements HttpHandler {
         }
         Object payload = null;
         if ("observe".equals(request.kind)) {
-            if ("server_tick".equals(request.name)) {
+            if ("hud_batch".equals(request.name)) {
+                payload = HudTraceRecorder.readBatch(request.traceId, request.sequence, request.limit);
+            } else if ("server_tick".equals(request.name)) {
                 if (before.isPresent()) {
                     payload = before.getAsLong();
                 }
@@ -217,6 +231,18 @@ public final class ScenarioEndpoint implements HttpHandler {
                 payload = ScenarioObservers.auraAt(client, request.x, request.y, request.z).orElse(null);
             }
             result.addProperty("observation_source", "client_or_integrated_server_pointer");
+        } else if ("hud_start".equals(request.name) || "hud_stop".equals(request.name)) {
+            if (!ReflectionHelper.isMcpControlMode()) throw new IllegalStateException("control required");
+            String traceId = request.traceId;
+            if ("hud_start".equals(request.name)) traceId = HudTraceRecorder.start(client);
+            else HudTraceRecorder.stop(client, traceId);
+            JsonObject ack = new JsonObject();
+            ack.addProperty("action", request.name);
+            ack.addProperty("status", "input_dispatched");
+            ack.addProperty("inputCalls", 1);
+            ack.addProperty("traceId", traceId);
+            ack.addProperty("detail", "capture lifecycle only; rendered evidence requires independent validation");
+            payload = ack;
         } else if ("set_crouch".equals(request.name)) {
             payload = ScenarioActions.setCrouch(client, request.pressed);
         } else if ("select_hotbar".equals(request.name)) {
@@ -268,8 +294,21 @@ public final class ScenarioEndpoint implements HttpHandler {
             throw new IllegalArgumentException("params object required");
         }
         Request request = new Request(kind, name);
-        if ("server_tick".equals(name) || "player_inventory".equals(name)) {
+        if ("server_tick".equals(name) || "player_inventory".equals(name) || "hud_start".equals(name)) {
             fields(params);
+        } else if ("hud_stop".equals(name) || "hud_batch".equals(name) || "hud_keyframe".equals(name)) {
+            if ("hud_stop".equals(name)) fields(params, "trace_id");
+            else if ("hud_batch".equals(name)) fields(params, "trace_id", "after_sequence", "limit");
+            else fields(params, "trace_id", "sequence");
+            request.traceId = string(params, "trace_id");
+            if (!java.util.UUID.fromString(request.traceId).toString().equals(request.traceId))
+                throw new IllegalArgumentException("canonical trace ID required");
+            if ("hud_batch".equals(name)) {
+                request.sequence = integer(params, "after_sequence", 0, Integer.MAX_VALUE);
+                request.limit = integer(params, "limit", 1, 32);
+            } else if ("hud_keyframe".equals(name)) {
+                request.sequence = integer(params, "sequence", 1, Integer.MAX_VALUE);
+            }
         } else if ("ground_entities".equals(name)) {
             fields(params, "radius");
             request.radius = integer(params, "radius", 1, 16);
@@ -416,6 +455,9 @@ public final class ScenarioEndpoint implements HttpHandler {
         int z;
         int targetY;
         int radius;
+        int sequence;
+        int limit;
+        String traceId;
         int slot;
         int count;
         String itemId;

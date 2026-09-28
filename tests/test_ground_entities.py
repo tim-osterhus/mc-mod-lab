@@ -55,6 +55,39 @@ class GroundEntitiesTests(unittest.TestCase):
         with self.assertRaises(lab.LabError):
             self.parse()
 
+    def impulse(self, mutate=None, minimum=0.5, maximum=1.0):
+        before = self.parse()
+        before["entities"][0]["velocity"] = {"x": 0, "y": 0, "z": 0}
+        after = self.parse()
+        after["server_tick"] = 67
+        if mutate:
+            mutate(after)
+        observations = {name: {("ground_entities", 6): {"value": value}}
+                        for name, value in (("before", before), ("after", after))}
+        return scenario_v2._assert_entity_impulse({"before": "before", "after": "after",
+                    "entity_id": "minecraft:pig", "minimum_speed": minimum, "maximum_speed": maximum}, observations)
+
+    def test_stationary_outward_impulse(self):
+        self.assertAlmostEqual(self.impulse()["observed"], 0.7)
+
+    def test_zero_control_cannot_pass_positive(self):
+        with self.assertRaises(lab.LabError):
+            self.impulse(lambda value: value["entities"][0]["velocity"].update(x=0))
+        result = self.impulse(lambda value: value["entities"][0]["velocity"].update(x=0), 0, 0.001)
+        self.assertEqual(result["observed"], 0)
+
+    def test_inward_motion_is_not_pusher_effect(self):
+        with self.assertRaises(lab.LabError):
+            self.impulse(lambda value: value["entities"][0]["velocity"].update(x=-0.7))
+
+    def test_changed_player_position_refuses_constant_distance_claim(self):
+        with self.assertRaises(lab.LabError):
+            self.impulse(lambda value: value["player_position"].update(x=0.6))
+
+    def test_changed_target_refuses_impulse_comparison(self):
+        with self.assertRaises(lab.LabError):
+            self.impulse(lambda value: value["entities"][0].update(entity_key="f" * 64))
+
 
 if __name__ == "__main__":
     unittest.main()

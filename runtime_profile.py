@@ -134,7 +134,7 @@ def prepare(manifest_path, out):
             raise lab.LabError("copied runtime mod hash mismatch", "fail")
     (game / "options.txt").write_text(
         "onboardAccessibility:false\nrenderDistance:4\nsimulationDistance:5\n"
-        "maxFps:30\nenableVsync:false\npauseOnLostFocus:false\n", encoding="utf-8")
+        "maxFps:30\nenableVsync:false\npauseOnLostFocus:false\nguiScale:2\n", encoding="utf-8")
     args = _launcher_args(template, game, world.name, out / "quickPlay.json")
     (out / "java.args").write_text(args, encoding="utf-8")
     result = {"schema_version": 1, "status": "prepared_not_launched", "created_at": lab.now(),

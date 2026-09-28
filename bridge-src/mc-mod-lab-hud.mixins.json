@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "xyz.langyo.minecraft.mcp.common.hudmixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["HudTraceMixin"],
+  "injectors": {"defaultRequire": 1}
+}

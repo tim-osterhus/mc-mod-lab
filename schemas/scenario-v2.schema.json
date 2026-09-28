@@ -122,12 +122,16 @@
     },
     "action": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "seconds", "x", "y", "z"],
+         "properties": {"type": {"const": "capture_hud_trace"}, "seconds": {"type": "integer", "minimum": 10, "maximum": 20},
+           "trigger": {"const": "drop_selected"},
+           "x": {"$ref": "#/$defs/x"}, "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}}},
         {"type": "object", "additionalProperties": false, "required": ["type", "pressed"],
          "properties": {"type": {"const": "set_crouch"}, "pressed": {"type": "boolean"}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "key"],
-          "properties": {"type": {"const": "press_key"}, "key": {"enum": ["Enter", "Escape", "E", "Tab"]}}
+          "properties": {"type": {"const": "press_key"}, "key": {"enum": ["Enter", "Escape", "E", "Tab", "B"]}}
         },
         {
           "type": "object", "additionalProperties": false,
@@ -186,6 +190,12 @@
     },
     "require": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false,
+         "required": ["type", "before", "after", "entity_id", "minimum_speed", "maximum_speed"],
+         "properties": {"type": {"const": "stationary_entity_impulse"},
+           "before": {"$ref": "#/$defs/id"}, "after": {"$ref": "#/$defs/id"}, "entity_id": {"$ref": "#/$defs/registry_id"},
+           "minimum_speed": {"type": "number", "minimum": 0, "maximum": 4},
+           "maximum_speed": {"type": "number", "minimum": 0, "maximum": 4}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "before", "after", "direction", "count", "component_types", "transactions"],

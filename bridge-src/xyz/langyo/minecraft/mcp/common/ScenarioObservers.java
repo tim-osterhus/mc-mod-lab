@@ -162,7 +162,7 @@ public final class ScenarioObservers {
         return rawItemId == null ? "unknown" : clip(rawItemId, MAX_COMPONENT_ID_CHARS);
     }
 
-    private static ItemSnapshot snapshotItem(class_1799 stack, String section, int slot, int count) {
+    static ItemSnapshot snapshotItem(class_1799 stack, String section, int slot, int count) {
         Object registeredItemId = class_7923.field_41178.method_10221(stack.method_7909());
         String rawItemId = registeredItemId == null ? null : String.valueOf(registeredItemId);
         String itemId = rawItemId == null ? "unknown" : clip(rawItemId, MAX_COMPONENT_ID_CHARS);

@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -153,7 +154,7 @@ def hardened_http(source):
                 if (params.size() != 0) throw new IllegalArgumentException("unexpected public parameter");
             } else if ("press_key".equals(cmd)) {
                 if (params.size() != 1 || !params.has("key")
-                        || !java.util.Arrays.asList("Enter", "Escape", "E", "Tab")
+                        || !java.util.Arrays.asList("Enter", "Escape", "E", "Tab", "B")
                             .contains(params.get("key").getAsString())) {
                     throw new IllegalArgumentException("key is outside public allowlist");
                 }
@@ -213,6 +214,7 @@ def build(args):
     fabric_loader = Path(args.fabric_loader).resolve(strict=True)
     datafixerupper = Path(args.datafixerupper).resolve(strict=True)
     brigadier = Path(args.brigadier).resolve(strict=True)
+    sponge_mixin = Path(args.sponge_mixin).resolve(strict=True)
     jdk_bin = Path(args.jdk_bin).resolve(strict=True)
     output = Path(args.output).absolute()
     work = Path(args.work).absolute()
@@ -241,7 +243,8 @@ def build(args):
         transformed = hardened_http(text) if name == "McpHttpServer.java" else mapped_input(text, mappings)
         path.write_text(transformed, encoding="utf-8")
         sources.append(path)
-    for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java", "GroundEntityObservers.java"):
+    for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java", "GroundEntityObservers.java",
+                 "HudTraceRecorder.java", "hudmixin/HudTraceMixin.java"):
         sources.append(ROOT / "bridge-src/xyz/langyo/minecraft/mcp/common" / name)
     sources.append(ROOT / "bridge-src/ScenarioActions.java")
     for source in sources:
@@ -252,15 +255,29 @@ def build(args):
     javac = jdk_bin / "javac.exe"
     jar = jdk_bin / "jar.exe"
     classpath = ";".join(map(str, (alpha, gson, minecraft, aura,
-                                   fabric_loader, datafixerupper, brigadier)))
+                                   fabric_loader, datafixerupper, brigadier, sponge_mixin)))
     subprocess.run([str(javac), "-J-Xmx512m", "--release", "21", "-proc:none", "-cp",
                     classpath, "-d", str(classes), *map(str, sources)], check=True)
     shutil.copy2(alpha, output)
     subprocess.run([str(jar), "uf", str(output), "-C", str(classes),
                     "xyz/langyo/minecraft/mcp/common"], check=True)
+    resources = work / "hud-resources"
+    resources.mkdir()
+    config = "mc-mod-lab-hud.mixins.json"
+    shutil.copy2(ROOT / "bridge-src" / config, resources / config)
+    with zipfile.ZipFile(output) as archive:
+        metadata = json.loads(archive.read("fabric.mod.json"))
+    mixins = metadata.setdefault("mixins", [])
+    if not isinstance(mixins, list) or config in mixins:
+        raise ValueError("unexpected upstream mixin registration")
+    mixins.append({"config": config, "environment": "client"})
+    (resources / "fabric.mod.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    subprocess.run([str(jar), "uf", str(output), "-C", str(resources), "fabric.mod.json",
+                    "-C", str(resources), config], check=True)
     with zipfile.ZipFile(output) as archive:
         for name in ("McpHttpServer", "ReflectedInputHandler", "ScenarioEndpoint",
-                     "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers", "GroundEntityObservers"):
+                     "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers", "GroundEntityObservers",
+                     "HudTraceRecorder", "hudmixin/HudTraceMixin"):
             if not archive.read("xyz/langyo/minecraft/mcp/common/" + name + ".class"):
                 raise ValueError("packaged class missing from derivative")
     return digest(output)
@@ -269,7 +286,7 @@ def build(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("upstream", "gson", "mappings", "jdk-bin", "output", "work",
-                 "minecraft", "aura", "fabric-loader", "datafixerupper", "brigadier"):
+                 "minecraft", "aura", "fabric-loader", "datafixerupper", "brigadier", "sponge-mixin"):
         parser.add_argument("--" + name, required=True)
     try:
         print("Public packaged bridge SHA-256: " + build(parser.parse_args()))

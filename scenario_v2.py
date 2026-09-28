@@ -17,9 +17,9 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities"}
-SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch"}
-SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities", "hud_batch"}
+SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch", "hud_start", "hud_stop"}
+SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer", "stationary_entity_impulse"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
 REGISTRY_ID = re.compile(r"^[a-z0-9_.-]+:[a-z0-9_./-]+$")
@@ -37,6 +37,16 @@ def validate_scenario(value):
     observations = {step["id"]: _typed_observations(step) for step in value["steps"]}
     for index, step in enumerate(value["steps"]):
         requirement = step.get("require")
+        if requirement and requirement["type"] == "stationary_entity_impulse":
+            refs = [requirement[k] for k in ("before", "after")]
+            if any(ref not in positions for ref in refs) or not positions[refs[0]] < positions[refs[1]] < index:
+                raise contracts.ContractError("entity observations must precede assertion in order")
+            specs = [[s for s in observations[ref] if s["type"] == "ground_entities"] for ref in refs]
+            if any(len(s) != 1 for s in specs) or specs[0] != specs[1]:
+                raise contracts.ContractError("entity assertion requires the same bounded query")
+            if requirement["minimum_speed"] > requirement["maximum_speed"]:
+                raise contracts.ContractError("entity speed range is reversed")
+            continue
         if requirement and requirement["type"] == "storage_transfer":
             refs = [requirement[key] for key in ("before", "after")]
             if any(ref not in positions for ref in refs) or not positions[refs[0]] < positions[refs[1]] < index:
@@ -483,7 +493,7 @@ def missing_capability(step):
     if kind == "action":
         action = step["action"]["type"]
         return ("action capability unavailable: " + action
-                if action not in SUPPORTED_ACTIONS | SCENARIO_ACTIONS else None)
+                if action not in SUPPORTED_ACTIONS | SCENARIO_ACTIONS | {"capture_hud_trace"} else None)
     if kind == "wait":
         return ("server game-tick wait capability unavailable"
                 if step["wait"]["type"] != "ticks" else None)
@@ -507,6 +517,12 @@ def _validate_action_ack(result, name):
     calls = result.get("inputCalls")
     if isinstance(calls, bool) or not isinstance(calls, int) or not 0 <= calls <= 64:
         raise lab.LabError("scenario action input count is invalid", "fail")
+    if name in {"hud_start", "hud_stop"}:
+        try:
+            if str(UUID(result["traceId"])) != result["traceId"]:
+                raise ValueError("noncanonical trace")
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise lab.LabError("capture acknowledgement lacks a canonical trace ID", "fail") from exc
 
 
 def _route_action(identity, action):
@@ -590,6 +606,36 @@ def _inventory_groups(snapshot):
     return groups
 
 
+def _assert_entity_impulse(requirement, observations):
+    before, after = [_find_observation(observations, requirement[k], "ground_entities")["value"]
+                     for k in ("before", "after")]
+    targets = [[row for row in snapshot["entities"] if row["entity_id"] == requirement["entity_id"]]
+               for snapshot in (before, after)]
+    if any(len(rows) != 1 for rows in targets):
+        raise lab.LabError("impulse proof requires one unambiguous target", "fail")
+    left, right = targets[0][0], targets[1][0]
+    speed = math.sqrt(sum(v * v for v in right["velocity"].values()))
+    initial_speed = math.sqrt(sum(v * v for v in left["velocity"].values()))
+    outward = sum(right["velocity"][axis] * (right["position"][axis] - after["player_position"][axis])
+                  for axis in ("x", "y", "z"))
+    evidence = {"assertion": "stationary_entity_impulse", "entity_key": right["entity_key"],
+                "before_value": initial_speed, "after_value": speed, "observed": speed,
+                "minimum_speed": requirement["minimum_speed"], "maximum_speed": requirement["maximum_speed"],
+                "server_authoritative": True}
+    valid = (before["server_tick"] < after["server_tick"] and before["dimension"] == after["dimension"]
+             and before["player_position"] == after["player_position"]
+             and left["entity_key"] == right["entity_key"] and left["alive"] and right["alive"]
+             and left.get("health") is not None and left["health"] == right.get("health")
+             and left["position"] == right["position"] and initial_speed <= 0.001
+             and requirement["minimum_speed"] <= speed <= requirement["maximum_speed"]
+             and (requirement["minimum_speed"] == 0 or outward > 0))
+    if not valid:
+        error = lab.LabError("controlled entity identity, fixed positions or outward impulse contradicted expectation", "fail")
+        error.evidence = evidence
+        raise error
+    return evidence
+
+
 def _assert_storage_transfer(requirement, observations):
     left, right = [_find_observation(observations, requirement[k], "aura_storage_fixture")["value"]
                    for k in ("before", "after")]
@@ -621,6 +667,8 @@ def _assert_storage_transfer(requirement, observations):
 
 
 def _assert_typed(identity, requirement, observations):
+    if requirement["type"] == "stationary_entity_impulse":
+        return _assert_entity_impulse(requirement, observations)
     if requirement["type"] == "storage_transfer":
         return _assert_storage_transfer(requirement, observations)
     if requirement["type"] == "pump_accounting":
@@ -816,6 +864,11 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
             evidence["typed_observations"] = typed_evidence
     elif kind == "action":
         action = step["action"]
+        if action["type"] == "capture_hud_trace":
+            import hud_capture
+            result = hud_capture.capture(identity, action, out / ("hud-" + step["id"]), wall_deadline, cancel_event)
+            return {"action_type": "capture_hud_trace", "acknowledged": True,
+                    "hud_capture": result}, keyframes_left
         if action["type"] in SCENARIO_ACTIONS:
             evidence = _route_action(identity, action)
             return evidence, keyframes_left

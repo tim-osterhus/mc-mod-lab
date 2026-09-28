@@ -168,6 +168,14 @@
         "evidence": {
           "type": "object", "additionalProperties": false,
           "properties": {
+            "hud_capture": {
+              "type": "object", "additionalProperties": false,
+              "required": ["trace_file", "frame_count", "keyframe_count", "visual_status"],
+              "properties": {"trace_file": {"type": "string", "maxLength": 180},
+                "frame_count": {"type": "integer", "minimum": 1, "maximum": 1200},
+                "keyframe_count": {"type": "integer", "minimum": 1, "maximum": 64},
+                "visual_status": {"const": "not_reviewed"}}
+            },
             "pump_accounting": {
               "type": "object", "additionalProperties": false,
               "required": ["mode", "before", "after", "end", "expected_aura"],
@@ -190,6 +198,9 @@
             "typed_observations": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/typed_observation"}},
             "assertion": {"type": "string", "maxLength": 80},
             "observed": {"type": ["string", "number", "boolean", "null"], "maxLength": 160},
+            "entity_key": {"$ref": "#/$defs/hash"},
+            "minimum_speed": {"type": "number", "minimum": 0, "maximum": 4},
+            "maximum_speed": {"type": "number", "minimum": 0, "maximum": 4},
             "metric": {"enum": ["aura_by_color", "total_aura", "stored_power", "power", "speed"]},
             "color": {"enum": ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"]},
             "before_value": {"type": "number"},

@@ -18,6 +18,7 @@ python scripts/build_packaged_bridge.py \
   --fabric-loader ABSOLUTE_FABRIC_LOADER_JAR \
   --datafixerupper ABSOLUTE_DFU_JAR \
   --brigadier ABSOLUTE_BRIGADIER_JAR \
+  --sponge-mixin ABSOLUTE_SPONGE_MIXIN_JAR \
   --jdk-bin ABSOLUTE_JDK21_BIN \
   --output NEW_ABSOLUTE_DERIVATIVE_JAR \
   --work NEW_ABSOLUTE_WORK_DIRECTORY
@@ -54,7 +55,8 @@ uses item ID plus a canonical override/removal patch against the pinned registry
 defaults. Supported overrides are bounded custom data, damage, max damage, max
 stack size, repair cost, and enchantment glint override. Unknown or truncated
 component patches withhold exact aggregate digests. Raw custom data is not
-returned. Exact storage/reload proofs remain unvalidated.
+returned. The later storage checkpoint below validates one bounded exact
+storage/reload fixture, not arbitrary component codecs or storage layouts.
 
 Actions require control mode. Their acknowledgements are not completion checks:
 scenarios must wait for normal server ticks and assert the observed transition.
@@ -115,3 +117,10 @@ and private-byte sample guard applies per workload; it is not an OS hard cap.
 The builder is pinned to Minecraft 1.21.1 intermediary mappings. Another
 Minecraft version requires a separately reviewed mapping/build/test cycle;
 simply changing the manifest version is unsupported.
+
+The [render-capture checkpoint](checkpoints/2026-09-27-hud-capture.md) adds
+bounded per-render framebuffer evidence and an independent structural validator.
+`capture_hud_trace` collects evidence; its successful action/report is not a
+visual verdict. Use `hud_trace.validate_capture` with the declared fixture
+identity before independent PNG calibration and visual review. Pusher and HUD
+acceptance remain incomplete; three of five shared gameplay proofs are accepted.
