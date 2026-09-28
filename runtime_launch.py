@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import shutil
 import socket
@@ -11,10 +12,12 @@ import subprocess
 import threading
 import tempfile
 import time
+from uuid import uuid4
 
 import contracts
 import lab
 import scenario_v2
+import runtime_profile
 
 
 def _choose_port(excluded=()):
@@ -181,7 +184,70 @@ def _probe_public_bridge(identity):
     return {"status": "pass", "denied": ["execute_command", "extra_top_level_parameter"]}
 
 
-def launch(manifest_path, profile_path, scenario_path):
+def _resume_checkpoint(profile, world, artifact_sha256):
+    if (profile / "game" / scenario_v2.UNCERTAIN_MARKER).exists():
+        raise lab.LabError("uncertain profile cannot be resumed")
+    receipt_path = profile / "saved-world.json"
+    receipt = contracts.load(receipt_path)
+    relative = receipt.get("run_directory")
+    if relative != "." and (not isinstance(relative, str)
+                             or not re.fullmatch(r"runs/[0-9a-f]{32}", relative)):
+        raise lab.LabError("saved run directory is invalid")
+    previous = profile / relative
+    if previous.is_symlink() or receipt_path.is_symlink() or (profile / "runs").is_symlink():
+        raise lab.LabError("saved checkpoint contains a symlink")
+    lifecycle = previous / "lifecycle-report.json"
+    report = previous / "scenario-evidence" / "report.json"
+    if (receipt.get("artifact_sha256") != artifact_sha256
+            or lab.sha256(lifecycle) != receipt.get("lifecycle_sha256")
+            or lab.sha256(report) != receipt.get("scenario_report_sha256")):
+        raise lab.LabError("saved checkpoint evidence changed")
+    prior = contracts.load(lifecycle)
+    if (prior.get("status") != "pass" or prior.get("cleanup") != {"status": "pass", "exit_code": 0}
+            or prior.get("bridge_classification") != "public_reviewed"):
+        raise lab.LabError("only a successful normally closed public run can resume")
+    with lab.closed_seed_lock(world):
+        if runtime_profile._fixture_hash(world) != receipt.get("world_sha256"):
+            raise lab.LabError("saved world changed after its checkpoint")
+    return receipt_path, receipt
+
+
+def _save_checkpoint(profile, world, run_directory, artifact_sha256):
+    run = profile / run_directory
+    report = run / "scenario-evidence" / "report.json"
+    if not report.is_file() or (profile / "game" / scenario_v2.UNCERTAIN_MARKER).exists():
+        return
+    with lab.closed_seed_lock(world):
+        world_hash = runtime_profile._fixture_hash(world)
+    lab.write_json(profile / "saved-world.json", {
+        "schema_version": 1, "run_directory": run_directory,
+        "artifact_sha256": artifact_sha256, "world_sha256": world_hash,
+        "lifecycle_sha256": lab.sha256(run / "lifecycle-report.json"),
+        "scenario_report_sha256": lab.sha256(report)})
+
+
+def _verify_storage_resume(identity, previous_report, destination):
+    # This fixed observer describes stable storage contents, not ticking machinery.
+    latest = {}
+    for step in previous_report.get("steps", []):
+        for snapshot in step.get("evidence", {}).get("typed_observations", []):
+            if snapshot.get("type") == "aura_storage_fixture" and step.get("status") == "pass":
+                key = tuple(snapshot[k] for k in ("x", "y", "z"))
+                latest[key] = snapshot
+    comparisons = []
+    for expected in latest.values():
+        spec = {k: expected[k] for k in ("type", "x", "y", "z")}
+        _, observed = scenario_v2._scenario_observation(identity, spec)
+        stable_keys = ("type", "x", "y", "z", "power", "transaction_cost", "inventory", "storage")
+        same = all(expected.get(k) == observed.get(k) for k in stable_keys)
+        comparisons.append({"status": "pass" if same else "fail", "expected": expected, "observed": observed})
+        lab.write_json(destination, {"schema_version": 1, "comparisons": comparisons})
+        if not same:
+            raise lab.LabError("saved storage contents, components, inventory or power changed across reopen", "fail")
+    return {"status": "pass" if comparisons else "not_applicable", "fixtures": len(comparisons)}
+
+
+def launch(manifest_path, profile_path, scenario_path, resume=False):
     manifest = contracts.load(manifest_path)
     contracts.schema_check(manifest, "runtime-profile")
     profile = Path(profile_path)
@@ -202,7 +268,7 @@ def launch(manifest_path, profile_path, scenario_path):
                 or item["mod_version"] != declared["mod_version"]
                 or item["file"] != Path(declared["path"]).name):
             raise lab.LabError("prepared mod identity differs from reviewed runtime manifest")
-    if (profile / "lifecycle-report.json").exists() or (profile / "game" / "logs" / "latest.log").exists():
+    if not resume and ((profile / "lifecycle-report.json").exists() or (profile / "game" / "logs" / "latest.log").exists()):
         raise lab.LabError("prepared profile was already launched")
     java = Path(manifest["java_exe"])
     if not java.is_file() or lab.sha256(java) != data["java_sha256"]:
@@ -221,12 +287,26 @@ def launch(manifest_path, profile_path, scenario_path):
         if jar.is_symlink() or not jar.is_file() or lab.sha256(jar) != item["sha256"]:
             raise lab.LabError("prepared mod changed before launch")
     world = profile / "game" / "saves" / data["world_directory"]
-    if not world.is_dir() or (world / "session.lock").exists():
+    if not world.is_dir() or (not resume and (world / "session.lock").exists()):
         raise lab.LabError("prepared world is missing or already locked")
+    receipt = None
+    if resume:
+        receipt_path, receipt = _resume_checkpoint(profile, world, target["sha256"])
+        run_directory = "runs/" + uuid4().hex
+        run = profile / run_directory
+        run.mkdir(parents=True)
+        # Consuming the receipt also prevents simultaneous resumes of one save.
+        try:
+            receipt_path.replace(run / "consumed-checkpoint.json")
+        except OSError as exc:
+            raise lab.LabError("saved checkpoint was already consumed") from exc
+    else:
+        run_directory, run = ".", profile
     output = {"schema_version": 1, "created_at": lab.now(), "status": "unsupported",
               "bridge_classification": manifest["bridge_classification"],
               "artifact_sha256": target["sha256"], "fixture_sha256": data["fixture_sha256"],
               "scenario": scenario["id"], "scenario_status": "not_run",
+              "run_directory": run_directory,
               "public_bridge_security": {"status": "not_run"},
               "cleanup": {"status": "not_run"},
               "memory": {"working_set_limit_mib": 3800, "peak_working_set_mib": 0,
@@ -246,8 +326,8 @@ def launch(manifest_path, profile_path, scenario_path):
     cancel = threading.Event()
     monitor = None
     try:
-        with (profile / "stdout.log").open("w", encoding="utf-8") as stdout, \
-             (profile / "stderr.log").open("w", encoding="utf-8") as stderr:
+        with (run / "stdout.log").open("w", encoding="utf-8") as stdout, \
+             (run / "stderr.log").open("w", encoding="utf-8") as stderr:
             flags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             process = subprocess.Popen([str(java), "@" + str(profile / "java.args")],
                                        cwd=profile / "game", env=env, stdout=stdout,
@@ -259,10 +339,13 @@ def launch(manifest_path, profile_path, scenario_path):
                                    time.monotonic() + 180, cancel)
             if manifest["bridge_classification"] == "public_reviewed":
                 output["public_bridge_security"] = _probe_public_bridge(identity)
-            lab.write_json(profile / "identity.json", identity)
+            lab.write_json(run / "identity.json", identity)
+            if receipt is not None:
+                previous_report = contracts.load(profile / receipt["run_directory"] / "scenario-evidence" / "report.json")
+                output["storage_resume"] = _verify_storage_resume(identity, previous_report, run / "storage-continuity.json")
             artifact = profile / "game" / "mods" / target["file"]
-            result = scenario_v2.run(profile / "identity.json", scenario_path, artifact,
-                                     profile / "scenario-evidence", cancel_event=cancel)
+            result = scenario_v2.run(run / "identity.json", scenario_path, artifact,
+                                     run / "scenario-evidence", cancel_event=cancel)
             output["scenario_status"] = result["status"]
             output["status"] = result["status"]
     except (lab.LabError, OSError, subprocess.SubprocessError) as exc:
@@ -287,5 +370,15 @@ def launch(manifest_path, profile_path, scenario_path):
             output["status"] = "fail"
         if output["status"] == "pass" and manifest["bridge_classification"] == "private_diagnostic":
             output["status"] = "diagnostic_only"
-        lab.write_json(profile / "lifecycle-report.json", output)
+        launch_log = profile / "game" / "logs" / "latest.log"
+        if launch_log.is_file():
+            shutil.copy2(launch_log, run / "launch-log.txt")
+        lab.write_json(run / "lifecycle-report.json", output)
+        if (output["status"] == "pass" and output["cleanup"] == {"status": "pass", "exit_code": 0}
+                and manifest["bridge_classification"] == "public_reviewed"):
+            try:
+                _save_checkpoint(profile, world, run_directory, target["sha256"])
+            except (lab.LabError, OSError):
+                output["save_checkpoint"] = "unavailable"
+                lab.write_json(run / "lifecycle-report.json", output)
     return output

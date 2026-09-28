@@ -61,7 +61,8 @@ public final class ScenarioActions {
 
         class_1661 inventory = client.field_1724.method_31548();
         class_1799 stack = inventory.field_7547.get(slot);
-        if (stack == null || stack.method_7960() || stack.method_7909() != expectedItem) {
+        boolean verifiedEmpty = "minecraft:air".equals(verifiedItemId) && stack != null && stack.method_7960();
+        if (!verifiedEmpty && (stack == null || stack.method_7960() || stack.method_7909() != expectedItem)) {
             return rejected("select_hotbar", "requested item is not in the requested hotbar slot");
         }
 
@@ -106,6 +107,47 @@ public final class ScenarioActions {
         }
         return dispatched("drop_selected", count,
                 "vanilla single-item drop input was invoked; observe the ground and inventory separately");
+    }
+
+    public static ActionAck setCrouch(class_310 client, boolean pressed) {
+        ActionAck unavailable = requireClient(client, "set_crouch", true);
+        if (unavailable != null) return unavailable;
+        client.field_1690.field_1832.method_23481(pressed);
+        return dispatched("set_crouch", 1, "vanilla crouch key state changed; observe server state after normal ticks");
+    }
+
+    public static void releaseHeldInputs() {
+        Object instance = ReflectionHelper.getMinecraftInstance();
+        if (!(instance instanceof class_310 client)) {
+            throw new IllegalStateException("client unavailable for input release");
+        }
+        Runnable release = () -> {
+            client.field_1690.field_1832.method_23481(false);
+            if (client.field_1690.field_1832.method_1434()) {
+                throw new IllegalStateException("crouch input release was not confirmed");
+            }
+        };
+        if (client.method_18854()) {
+            release.run();
+            return;
+        }
+        java.util.concurrent.CompletableFuture<Void> completed = new java.util.concurrent.CompletableFuture<>();
+        client.execute(() -> {
+            try {
+                release.run();
+                completed.complete(null);
+            } catch (RuntimeException failure) {
+                completed.completeExceptionally(failure);
+            }
+        });
+        try {
+            completed.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException failure) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("input release interrupted", failure);
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException failure) {
+            throw new IllegalStateException("input release was not confirmed", failure);
+        }
     }
 
     /**

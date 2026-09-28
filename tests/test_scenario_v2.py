@@ -170,6 +170,17 @@ class ScenarioV2Tests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["cleanup"]["status"], "fail")
         self.assertTrue((self.game / ".mc-mod-lab-control.lock").exists())
+        self.assertTrue((self.game / scenario_v2.UNCERTAIN_MARKER).exists())
+
+    def test_control_exit_timeout_quarantines_profile(self):
+        lease = scenario_v2.ControlLease(self.identity)
+        with patch.object(lab, "command", side_effect=self.command):
+            lease.enter()
+        with patch.object(lab, "command", side_effect=lab.LabError("input release was not confirmed", "fail")):
+            result = lease.release()
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(lease.path.exists())
+        self.assertTrue((self.game / scenario_v2.UNCERTAIN_MARKER).exists())
 
     def test_duplicate_json_key_is_rejected(self):
         self.scenario_file.write_text('{"id":"a","id":"b"}', encoding="utf-8")

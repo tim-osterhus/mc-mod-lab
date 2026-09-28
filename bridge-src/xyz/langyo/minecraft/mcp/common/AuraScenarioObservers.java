@@ -20,6 +20,7 @@ import pixlepix.auracascade.block.entity.AuraNodeBlockEntity;
 import pixlepix.auracascade.block.entity.AuraPumpBlockEntity;
 import pixlepix.auracascade.block.entity.AuraPumpLogic;
 import pixlepix.auracascade.block.entity.StorageBookshelfBlockEntity;
+import pixlepix.auracascade.block.entity.BookshelfCoordinatorBlockEntity;
 import pixlepix.auracascade.item.books.StorageBookData;
 import pixlepix.auracascade.parity.AuraColor;
 
@@ -31,6 +32,52 @@ public final class AuraScenarioObservers {
     public static final int MAX_STORAGE_ENTRIES = 64;
 
     private AuraScenarioObservers() {
+    }
+
+    /** Fixed one-shelf fixture: shelf east, sole power node west of coordinator. */
+    static com.google.gson.JsonObject storageFixture(net.minecraft.class_1132 server,
+            net.minecraft.class_3218 level, java.util.UUID playerId, int x, int y, int z) {
+        if (level == null || !server.method_18854() || Math.abs((long) x) > 29_999_997
+                || Math.abs((long) z) > 29_999_997 || y < -63 || y > 318) return null;
+        class_2338 center = new class_2338(x, y, z);
+        class_2338 shelfPos = new class_2338(x + 1, y, z);
+        class_2338 powerPos = new class_2338(x - 1, y, z);
+        // Bound the connected network before calling the product's shelf scan.
+        int[][] offsets = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+        for (class_2338 anchor : new class_2338[]{center, shelfPos}) {
+            for (int[] offset : offsets) {
+                class_2338 pos = new class_2338(anchor.method_10263() + offset[0],
+                        anchor.method_10264() + offset[1], anchor.method_10260() + offset[2]);
+                if (!level.method_22340(pos)) return null;
+                String id = String.valueOf(class_7923.field_41175.method_10221(level.method_8320(pos).method_26204()));
+                if (!pos.equals(shelfPos) && (id.equals("minecraft:bookshelf")
+                        || id.equals("minecraft:chiseled_bookshelf") || id.equals("aura:storage_bookshelf"))) return null;
+                if (!pos.equals(powerPos) && level.method_8321(pos) instanceof AuraNetworkBlockEntity) return null;
+            }
+        }
+        if (!(level.method_8321(center) instanceof BookshelfCoordinatorBlockEntity coordinator)
+                || !(level.method_8321(shelfPos) instanceof StorageBookshelfBlockEntity)
+                || !(level.method_8321(powerPos) instanceof AuraNodeBlockEntity)) return null;
+        BookshelfCoordinatorBlockEntity.NetworkSnapshot network = coordinator.snapshot(level, center);
+        if (!network.complete() || network.connectedShelfPositions().size() != 1
+                || !network.storageShelfPositions().equals(List.of(shelfPos))) return null;
+        long tick = server.method_3780();
+        ScenarioObservers.InventorySnapshot inventory = ScenarioObservers.playerInventoryServer(server, playerId).orElse(null);
+        if (inventory == null) return null;
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        com.google.gson.JsonObject result = new com.google.gson.JsonObject();
+        result.addProperty("serverAuthoritative", true);
+        result.addProperty("stateSource", "integrated_server_storage_fixture");
+        result.addProperty("serverTick", tick);
+        result.addProperty("x", x);
+        result.addProperty("y", y);
+        result.addProperty("z", z);
+        result.addProperty("requiredPower", network.requiredPower());
+        result.addProperty("availablePower", network.availablePower());
+        result.add("shelf", gson.toJsonTree(atWorld(level, x + 1, y, z, tick).orElse(null)));
+        result.add("powerNode", gson.toJsonTree(atWorld(level, x - 1, y, z, tick).orElse(null)));
+        result.add("inventory", gson.toJsonTree(inventory));
+        return result;
     }
 
     static Optional<ScenarioObservers.AuraSnapshot> auraAt(class_310 client, int x, int y, int z) {

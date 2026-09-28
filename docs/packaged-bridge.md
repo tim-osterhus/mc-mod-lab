@@ -91,7 +91,17 @@ acceptance gaps.
 The later [core and passive inventory checkpoint](checkpoints/2026-09-27-core-and-black-hole.md)
 adds a fixed atomic pump-pair observer, fuel/runtime accounting, and matched
 blocked/unfueled controls, plus the bounded Black Hole inventory fixture.
-Pusher, shared storage reload, and per-render HUD acceptance remain pending.
+The later [storage checkpoint](checkpoints/2026-09-27-storage-reload.md) adds
+real deposit, normal same-save reopen and component-exact withdrawal with an
+unpowered negative. Pusher and per-render HUD acceptance remain pending.
+
+`python lab.py runtime resume --manifest <reviewed-manifest> --profile <profile> --scenario <scenario>`
+reopens only a hash-bound, normally closed successful public run. It consumes
+the saved receipt and writes independent evidence under `runs/<id>`. It does
+not clone/reseed the world. For the fixed storage observer, the last recorded
+state is rechecked before new actions; place that final observation after all
+mutations. Input cleanup confirms client-thread key release, not a server
+tick transition; use typed server predicates after normal ticks for gameplay.
 
 Use a reviewed local [runtime manifest example](../examples/runtime-profile.example.json)
 to prepare a fresh profile. The launcher argument file is executable input:

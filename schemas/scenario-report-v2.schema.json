@@ -73,6 +73,33 @@
     "status": {"enum": ["pass", "fail", "inconclusive", "unsupported", "not_run"]},
     "typed_observation": {
       "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "server_authoritative", "server_tick", "radius", "dimension", "player_position", "entities"],
+          "properties": {"type": {"const": "ground_entities"}, "server_authoritative": {"const": true},
+            "server_tick": {"type": "integer", "minimum": 0}, "radius": {"type": "integer", "minimum": 1, "maximum": 16},
+            "dimension": {"type": "string", "maxLength": 128}, "player_position": {"$ref": "#/$defs/vector"},
+            "entities": {"type": "array", "maxItems": 64, "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["entity_id", "entity_key", "alive", "position", "velocity"],
+              "properties": {"entity_id": {"type": "string", "maxLength": 128}, "entity_key": {"$ref": "#/$defs/hash"},
+                "alive": {"type": "boolean"}, "position": {"$ref": "#/$defs/vector"}, "velocity": {"$ref": "#/$defs/vector"},
+                "health": {"type": "number", "minimum": 0}, "item_components_complete": {"type": "boolean"},
+                "item": {"$ref": "#/$defs/storage_item"}}
+            }}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "server_authoritative", "server_tick", "x", "y", "z", "power", "transaction_cost", "inventory", "storage"],
+          "properties": {
+            "type": {"const": "aura_storage_fixture"}, "server_authoritative": {"const": true},
+            "server_tick": {"type": "integer", "minimum": 0},
+            "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"},
+            "power": {"type": "integer", "minimum": 0}, "transaction_cost": {"const": 5},
+            "inventory": {"type": "array", "maxItems": 41, "items": {"$ref": "#/$defs/storage_item"}},
+            "storage": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/storage_item"}}
+          }
+        },
         {"$ref": "#/$defs/pump_pair"},
         {
           "type": "object", "additionalProperties": false,
@@ -89,6 +116,7 @@
           "properties": {
             "type": {"const": "player_inventory"}, "stack_count": {"type": "integer", "minimum": 0, "maximum": 41},
             "component_digests_complete": {"type": "boolean"}, "inventory_sha256": {"$ref": "#/$defs/hash"},
+            "crouching": {"type": "boolean"},
             "items": {"type": "array", "maxItems": 41, "items": {
               "type": "object", "additionalProperties": false,
               "required": ["item_id", "count", "component_sha256"],
@@ -117,6 +145,16 @@
           }
         }
       ]
+    },
+    "vector": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "z"],
+      "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}
+    },
+    "storage_item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "count", "component_sha256"],
+      "properties": {"item_id": {"type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"},
+        "count": {"type": "integer", "minimum": 1}, "component_sha256": {"$ref": "#/$defs/hash"}}
     },
     "step": {
       "type": "object", "additionalProperties": false,

@@ -133,6 +133,7 @@ def hardened_http(source):
     source = replace_once(source, anchor, anchor + check)
     source = replace_once(source, '                ev.params = body;\n',
                           '                validatePublicRequest(jo, cmd);\n'
+                          '                if ("exit_control_mode".equals(cmd)) ScenarioActions.releaseHeldInputs();\n'
                           '                ev.params = body;\n')
     validator = r'''        private void validatePublicRequest(com.google.gson.JsonObject jo, String cmd) {
             if (jo == null || !jo.has("cmd") || jo.has("method") || jo.size() > 2
@@ -240,7 +241,7 @@ def build(args):
         transformed = hardened_http(text) if name == "McpHttpServer.java" else mapped_input(text, mappings)
         path.write_text(transformed, encoding="utf-8")
         sources.append(path)
-    for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java"):
+    for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "AuraScenarioObservers.java", "GroundEntityObservers.java"):
         sources.append(ROOT / "bridge-src/xyz/langyo/minecraft/mcp/common" / name)
     sources.append(ROOT / "bridge-src/ScenarioActions.java")
     for source in sources:
@@ -259,7 +260,7 @@ def build(args):
                     "xyz/langyo/minecraft/mcp/common"], check=True)
     with zipfile.ZipFile(output) as archive:
         for name in ("McpHttpServer", "ReflectedInputHandler", "ScenarioEndpoint",
-                     "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers"):
+                     "ScenarioActions", "ScenarioObservers", "AuraScenarioObservers", "GroundEntityObservers"):
             if not archive.read("xyz/langyo/minecraft/mcp/common/" + name + ".class"):
                 raise ValueError("packaged class missing from derivative")
     return digest(output)

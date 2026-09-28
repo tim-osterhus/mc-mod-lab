@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import re
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 import zipfile
 
 import contracts
@@ -17,9 +17,9 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair"}
-SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block"}
-SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities"}
+SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch"}
+SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
 REGISTRY_ID = re.compile(r"^[a-z0-9_.-]+:[a-z0-9_./-]+$")
@@ -37,6 +37,21 @@ def validate_scenario(value):
     observations = {step["id"]: _typed_observations(step) for step in value["steps"]}
     for index, step in enumerate(value["steps"]):
         requirement = step.get("require")
+        if requirement and requirement["type"] == "storage_transfer":
+            refs = [requirement[key] for key in ("before", "after")]
+            if any(ref not in positions for ref in refs) or not positions[refs[0]] < positions[refs[1]] < index:
+                raise contracts.ContractError("storage observations must precede assertion in order")
+            specs = [[s for s in observations[ref] if s["type"] == "aura_storage_fixture"] for ref in refs]
+            if any(len(s) != 1 for s in specs) or specs[0] != specs[1]:
+                raise contracts.ContractError("storage transfer requires identical fixture coordinates")
+            target = specs[0][0]
+            uses = [s["action"] for s in value["steps"][positions[refs[0]] + 1:positions[refs[1]]]
+                    if s.get("action", {}).get("type") == "use_item_at_block"]
+            matching = [a for a in uses if a.get("block_id") == "aura:bookshelf_coordinator"
+                        and all(a.get(k) == target[k] for k in ("x", "y", "z"))]
+            if len(matching) < max(1, requirement["transactions"]):
+                raise contracts.ContractError("storage proof needs actual coordinator USE attempts between observations")
+            continue
         if requirement and requirement["type"] == "pump_accounting":
             refs = [requirement[key] for key in ("before", "after", "end")]
             if any(ref not in positions for ref in refs) or not positions[refs[0]] < positions[refs[1]] < positions[refs[2]] < index:
@@ -70,6 +85,8 @@ def _typed_observations(step):
 
 
 def _observation_key(spec):
+    if spec["type"] == "ground_entities":
+        return (spec["type"], spec["radius"])
     result = (spec["type"], spec.get("x"), spec.get("y"), spec.get("z"))
     return (*result, spec["target_y"]) if spec["type"] == "aura_pump_pair" else result
 
@@ -147,6 +164,7 @@ class ControlLease:
                     raise lab.LabError("bridge did not release control", "fail")
             except lab.LabError:
                 status, reason = "fail", "bridge did not confirm neutral manual control"
+                _mark_uncertain(self.identity)
         if self.acquired and status == "pass":
             try:
                 contents = json.loads(self.path.read_text(encoding="utf-8"))
@@ -231,14 +249,20 @@ def _mark_uncertain(identity):
 
 def _scenario_observation(identity, spec):
     name = spec["type"]
-    if name in {"aura_block", "aura_block_server", "aura_pump_pair"}:
+    if name in {"aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture"}:
         params = {key: spec[key] for key in ("x", "y", "z")}
         if name == "aura_pump_pair":
             params["target_y"] = spec["target_y"]
+    elif name == "ground_entities":
+        params = {"radius": spec["radius"]}
     else:
         params = {}
     envelope = scenario_request(identity, "observe", name, params)
     value = envelope["result"]
+    if name == "ground_entities":
+        value = _ground_entities_snapshot(value, envelope, spec)
+    if name == "aura_storage_fixture":
+        value = _storage_fixture_snapshot(value, envelope, spec)
     if name == "aura_pump_pair":
         value = _pump_pair_snapshot(value, envelope, spec)
     if name == "server_tick":
@@ -270,6 +294,100 @@ def _scenario_observation(identity, spec):
                     or not before <= tick <= after):
                 raise lab.LabError("server Aura snapshot tick is not bound to its observation")
     return envelope, value
+
+
+def _ground_entities_snapshot(value, envelope, spec):
+    if (not isinstance(value, dict) or value.get("serverAuthoritative") is not True
+            or value.get("stateSource") != "integrated_server_ground_entities"
+            or value.get("radius") != spec["radius"]):
+        raise lab.LabError("ground entity authority or radius unavailable")
+    tick = value.get("serverTick")
+    if (isinstance(tick, bool) or not isinstance(tick, int) or tick < 0
+            or envelope.get("server_tick_before") != tick or envelope.get("server_tick_after") != tick):
+        raise lab.LabError("ground entities must be atomic within one server tick")
+    dimension = value.get("dimensionId")
+    if not isinstance(dimension, str) or not REGISTRY_ID.fullmatch(dimension):
+        raise lab.LabError("ground entity dimension unavailable")
+    def vector(v):
+        if not isinstance(v, dict) or set(v) != {"x", "y", "z"}:
+            raise lab.LabError("entity vector unavailable")
+        if any(isinstance(n, bool) or not isinstance(n, (int, float)) or not math.isfinite(n) for n in v.values()):
+            raise lab.LabError("entity vector must be finite")
+        return dict(v)
+    rows = value.get("entities")
+    if not isinstance(rows, list) or len(rows) > 64:
+        raise lab.LabError("ground entity coverage unavailable")
+    output, seen = [], set()
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get("entityId"), str)
+                or not REGISTRY_ID.fullmatch(row["entityId"]) or not isinstance(row.get("alive"), bool)):
+            raise lab.LabError("entity identity unavailable")
+        try:
+            uid = str(UUID(row["uuid"]))
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise lab.LabError("entity UUID unavailable") from exc
+        if uid in seen:
+            raise lab.LabError("duplicate entity identity")
+        seen.add(uid)
+        entry = {"entity_id": row["entityId"], "entity_key": hashlib.sha256(uid.encode("ascii")).hexdigest(),
+                 "alive": row["alive"], "position": vector(row.get("position")), "velocity": vector(row.get("velocity"))}
+        health = row.get("health")
+        if health is not None:
+            if isinstance(health, bool) or not isinstance(health, (int, float)) or not math.isfinite(health) or health < 0:
+                raise lab.LabError("entity health unavailable")
+            entry["health"] = health
+        item = row.get("item")
+        if item is not None:
+            entry["item_components_complete"] = _component_complete(item)
+            if entry["item_components_complete"]:
+                entry["item"] = {"item_id": item["itemId"], "count": item["count"], "component_sha256": item["componentSetSha256"]}
+        output.append(entry)
+    return {"type": "ground_entities", "server_authoritative": True, "server_tick": tick,
+            "radius": spec["radius"], "dimension": dimension, "player_position": vector(value.get("playerPosition")),
+            "entities": output}
+
+
+def _storage_fixture_snapshot(value, envelope, spec):
+    if (not isinstance(value, dict) or value.get("serverAuthoritative") is not True
+            or value.get("stateSource") != "integrated_server_storage_fixture"
+            or any(value.get(key) != spec[key] for key in ("x", "y", "z"))):
+        raise lab.LabError("storage fixture identity or authority unavailable")
+    tick = value.get("serverTick")
+    if (isinstance(tick, bool) or not isinstance(tick, int) or tick < 0
+            or envelope.get("server_tick_before") != tick or envelope.get("server_tick_after") != tick):
+        raise lab.LabError("storage fixture must be atomic within one server tick")
+    for name, dx, kind, block in (("shelf", 1, "STORAGE_BOOKSHELF", "aura:storage_bookshelf"),
+                                  ("powerNode", -1, "NODE", "aura:aura_node")):
+        member = value.get(name, {})
+        if (member.get("serverTick") != tick or member.get("serverAuthoritative") is not True
+                or member.get("stateSource") != "integrated_server_block_entity"
+                or (member.get("x"), member.get("y"), member.get("z")) != (spec["x"] + dx, spec["y"], spec["z"])
+                or member.get("kind") != kind or member.get("blockId") != block):
+            raise lab.LabError("storage fixture member identity or timing unavailable")
+    inventory = value.get("inventory", {})
+    if (inventory.get("serverTick") != tick or inventory.get("serverAuthoritative") is not True
+            or inventory.get("stateSource") != "integrated_server_inventory"):
+        raise lab.LabError("storage fixture inventory must be atomic and authoritative")
+    parsed = _inventory_snapshot(inventory)
+    shelf = value["shelf"].get("bookshelf", {})
+    entries = shelf.get("entries")
+    if (not parsed["complete"] or shelf.get("hasBook") is not True
+            or shelf.get("entriesTruncated") is not False or shelf.get("entryDigestStatus") != "COMPLETE"
+            or not isinstance(entries, list) or len(entries) > 64
+            or any(not _component_complete(entry) for entry in entries)
+            or shelf.get("storedTypes") != len(entries)
+            or shelf.get("storedItemCount") != sum(entry["count"] for entry in entries)):
+        raise lab.LabError("storage fixture requires complete component identities and counts")
+    power = value.get("availablePower")
+    if (isinstance(power, bool) or not isinstance(power, int) or power < 0
+            or value.get("requiredPower") != 5 or value["powerNode"].get("node", {}).get("storedPower") != power):
+        raise lab.LabError("storage fixture power accounting unavailable")
+    def portable(stacks):
+        return sorted(({"item_id": s["itemId"], "count": s["count"], "component_sha256": s["componentSetSha256"]}
+                       for s in stacks), key=lambda s: (s["item_id"], s["component_sha256"], s["count"]))
+    return {"type": "aura_storage_fixture", "server_authoritative": True, "server_tick": tick,
+            "x": spec["x"], "y": spec["y"], "z": spec["z"], "power": power, "transaction_cost": 5,
+            "inventory": portable(parsed["stacks"]), "storage": portable(entries)}
 
 
 def _pump_pair_snapshot(value, envelope, spec):
@@ -472,7 +590,39 @@ def _inventory_groups(snapshot):
     return groups
 
 
+def _assert_storage_transfer(requirement, observations):
+    left, right = [_find_observation(observations, requirement[k], "aura_storage_fixture")["value"]
+                   for k in ("before", "after")]
+    def groups(rows):
+        result = {}
+        for row in rows:
+            key = row["item_id"], row["component_sha256"]
+            result[key] = result.get(key, 0) + row["count"]
+        return result
+    li, ri, ls, rs = [groups(rows) for rows in (left["inventory"], right["inventory"], left["storage"], right["storage"])]
+    keys = li.keys() | ri.keys() | ls.keys() | rs.keys()
+    deltas = {k: rs.get(k, 0) - ls.get(k, 0) for k in keys}
+    actual = sum(deltas.values())
+    expected = requirement["count"] * (-1 if requirement["direction"] == "withdraw" else 1)
+    evidence = {"assertion": "storage_transfer", "server_authoritative": True,
+                "before_value": left["power"], "after_value": right["power"],
+                "actual_count_delta": actual, "expected_count_delta": expected}
+    valid = (all(left[k] == right[k] for k in ("x", "y", "z", "transaction_cost"))
+             and right["server_tick"] > left["server_tick"]
+             and all(li.get(k, 0) + ls.get(k, 0) == ri.get(k, 0) + rs.get(k, 0) for k in keys)
+             and actual == expected and sum(v != 0 for v in deltas.values()) == requirement["component_types"]
+             and all(v <= 0 if expected < 0 else v >= 0 for v in deltas.values())
+             and left["power"] - right["power"] == 5 * requirement["transactions"])
+    if not valid:
+        error = lab.LabError("storage count/component conservation or transaction power contradicted expectation", "fail")
+        error.evidence = evidence
+        raise error
+    return evidence
+
+
 def _assert_typed(identity, requirement, observations):
+    if requirement["type"] == "storage_transfer":
+        return _assert_storage_transfer(requirement, observations)
     if requirement["type"] == "pump_accounting":
         return _assert_pump_accounting(requirement, observations)
     if requirement["type"] == "aura_increase":
@@ -609,7 +759,7 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     typed_evidence.append({"type": name, "server_tick": value,
                                            "server_tick_before": envelope.get("server_tick_before"),
                                            "server_tick_after": envelope.get("server_tick_after")})
-                elif name == "aura_pump_pair":
+                elif name in {"aura_pump_pair", "aura_storage_fixture", "ground_entities"}:
                     typed_evidence.append(value)
                 elif name == "player_inventory":
                     snapshot = _inventory_snapshot(value)
@@ -620,6 +770,8 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                                "state_source": value.get("stateSource"),
                                "server_tick_before": envelope.get("server_tick_before"),
                                "server_tick_after": envelope.get("server_tick_after")}
+                    if isinstance(value.get("crouching"), bool):
+                        summary["crouching"] = value["crouching"]
                     if snapshot["digest"]:
                         summary["inventory_sha256"] = snapshot["digest"]
                         summary["items"] = [{"item_id": stack["itemId"], "count": stack["count"],
@@ -697,6 +849,12 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     break
                 time.sleep(0.1)
             evidence = {"assertion": requirement["type"], "observed": observed}
+        elif requirement["type"] == "player_crouching":
+            _, inventory = _scenario_observation(identity, {"type": "player_inventory"})
+            observed = inventory.get("crouching")
+            if not isinstance(observed, bool):
+                raise lab.LabError("server crouch state is unavailable")
+            evidence = {"assertion": "player_crouching", "observed": observed, "server_authoritative": True}
         elif requirement["type"] == "world_name":
             observed = lab.world_check(identity)["world_name"]
             evidence = {"assertion": requirement["type"], "observed": observed}

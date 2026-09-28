@@ -71,9 +71,13 @@ def _launcher_args(template, game_dir, world_name, quickplay):
 
 
 def _fixture_hash(world):
+    if world.is_symlink():
+        raise lab.LabError("world hash refuses a symlink")
     digest = hashlib.sha256()
     for path in sorted(world.rglob("*")):
-        if path.is_dir() or path.name == lab.MARKER:
+        if path.is_symlink():
+            raise lab.LabError("world hash refuses symlink contents")
+        if path.is_dir() or path.name in {lab.MARKER, "session.lock"}:
             continue
         relative = path.relative_to(world).as_posix()
         digest.update(relative.encode("utf-8") + b"\0")

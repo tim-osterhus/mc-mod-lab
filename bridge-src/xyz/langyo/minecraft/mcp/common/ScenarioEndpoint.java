@@ -27,9 +27,9 @@ public final class ScenarioEndpoint implements HttpHandler {
     private static final int MAX_BODY_BYTES = 4096;
     private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
     private static final Set<String> OBSERVATIONS = new HashSet<String>(
-            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair"));
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "ground_entities"));
     private static final Set<String> ACTIONS = new HashSet<String>(
-            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block"));
+            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "set_crouch"));
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -65,6 +65,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                     try {
                         if (!expired.get()) {
                             if ("aura_block_server".equals(request.name)
+                                    || "ground_entities".equals(request.name)
+                                    || "aura_storage_fixture".equals(request.name)
                                     || "aura_pump_pair".equals(request.name)
                                     || "player_inventory".equals(request.name)) {
                                 net.minecraft.class_1132 server = client.method_1576();
@@ -137,6 +139,10 @@ public final class ScenarioEndpoint implements HttpHandler {
         net.minecraft.class_3218 level = server.method_3847(dimension);
         boolean inventory = "player_inventory".equals(request.name);
         Object payload = inventory ? ScenarioObservers.playerInventoryServer(server, playerId).orElse(null)
+                : "ground_entities".equals(request.name)
+                ? GroundEntityObservers.observe(server, playerId, request.radius).orElse(null)
+                : "aura_storage_fixture".equals(request.name)
+                ? ScenarioObservers.storageFixture(server, level, playerId, request.x, request.y, request.z)
                 : "aura_pump_pair".equals(request.name)
                 ? pumpPair(server, level, playerId, request)
                 : ScenarioObservers.auraAtServer(level, request.x, request.y, request.z).orElse(null);
@@ -211,6 +217,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                 payload = ScenarioObservers.auraAt(client, request.x, request.y, request.z).orElse(null);
             }
             result.addProperty("observation_source", "client_or_integrated_server_pointer");
+        } else if ("set_crouch".equals(request.name)) {
+            payload = ScenarioActions.setCrouch(client, request.pressed);
         } else if ("select_hotbar".equals(request.name)) {
             payload = ScenarioActions.selectHotbar(client, request.slot, request.itemId);
         } else if ("drop_selected".equals(request.name)) {
@@ -262,6 +270,14 @@ public final class ScenarioEndpoint implements HttpHandler {
         Request request = new Request(kind, name);
         if ("server_tick".equals(name) || "player_inventory".equals(name)) {
             fields(params);
+        } else if ("ground_entities".equals(name)) {
+            fields(params, "radius");
+            request.radius = integer(params, "radius", 1, 16);
+        } else if ("set_crouch".equals(name)) {
+            fields(params, "pressed");
+            if (!params.get("pressed").isJsonPrimitive() || !params.get("pressed").getAsJsonPrimitive().isBoolean())
+                throw new IllegalArgumentException("pressed must be boolean");
+            request.pressed = params.get("pressed").getAsBoolean();
         } else if ("drop_selected".equals(name)) {
             fields(params, "count");
             request.count = integer(params, "count", 1, 64);
@@ -273,7 +289,7 @@ public final class ScenarioEndpoint implements HttpHandler {
             if ("aura_pump_pair".equals(name)) {
                 fields(params, "x", "y", "z", "target_y");
                 request.targetY = integer(params, "target_y", -64, 319);
-            } else if ("aura_block".equals(name) || "aura_block_server".equals(name)) {
+            } else if ("aura_block".equals(name) || "aura_block_server".equals(name) || "aura_storage_fixture".equals(name)) {
                 fields(params, "x", "y", "z");
             } else {
                 fields(params, "x", "y", "z", "block_id");
@@ -284,7 +300,7 @@ public final class ScenarioEndpoint implements HttpHandler {
             if ("aura_pump_pair".equals(name)) {
                 if (request.targetY <= request.y || request.targetY > request.y + 15)
                     throw new IllegalArgumentException("target must be within upward fixture range");
-            } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name)) {
+            } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name) && !"aura_storage_fixture".equals(name)) {
                 request.blockId = registryId(params, "block_id");
             }
         }
@@ -399,10 +415,12 @@ public final class ScenarioEndpoint implements HttpHandler {
         int y;
         int z;
         int targetY;
+        int radius;
         int slot;
         int count;
         String itemId;
         String blockId;
+        boolean pressed;
 
         Request(String kind, String name) {
             this.kind = kind;

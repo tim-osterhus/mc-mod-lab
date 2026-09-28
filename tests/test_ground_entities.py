@@ -1,0 +1,60 @@
+import copy
+import unittest
+
+import lab
+import scenario_v2
+
+
+class GroundEntitiesTests(unittest.TestCase):
+    def setUp(self):
+        self.spec = {"type": "ground_entities", "radius": 6}
+        self.envelope = {"server_tick_before": 7, "server_tick_after": 7}
+        self.value = {"serverAuthoritative": True, "stateSource": "integrated_server_ground_entities",
+                      "serverTick": 7, "radius": 6, "dimensionId": "minecraft:overworld",
+                      "playerPosition": {"x": 0.5, "y": 161, "z": 2.5},
+                      "entities": [{"entityId": "minecraft:pig", "uuid": "00000000-0000-0000-0000-000000000001",
+                                    "alive": True, "position": {"x": 1, "y": 161, "z": 2},
+                                    "velocity": {"x": 0.7, "y": 0, "z": 0}, "health": 10}]}
+
+    def parse(self):
+        return scenario_v2._ground_entities_snapshot(self.value, self.envelope, self.spec)
+
+    def test_motion_snapshot_retains_measured_velocity(self):
+        result = self.parse()
+        self.assertEqual(result["entities"][0]["velocity"]["x"], 0.7)
+        self.assertNotIn("00000000", str(result))
+
+    def test_duplicate_identity_refused(self):
+        self.value["entities"].append(copy.deepcopy(self.value["entities"][0]))
+        with self.assertRaises(lab.LabError):
+            self.parse()
+
+    def test_nonfinite_velocity_refused(self):
+        self.value["entities"][0]["velocity"]["x"] = float("nan")
+        with self.assertRaises(lab.LabError):
+            self.parse()
+
+    def test_incomplete_item_does_not_claim_exact_digest(self):
+        self.value["entities"][0]["item"] = {"componentDigestStatus": "UNSUPPORTED"}
+        row = self.parse()["entities"][0]
+        self.assertFalse(row["item_components_complete"])
+        self.assertNotIn("item", row)
+
+    def test_snapshot_overflow_refused(self):
+        self.value["entities"] *= 65
+        with self.assertRaises(lab.LabError):
+            self.parse()
+
+    def test_wrong_tick_refused(self):
+        self.envelope["server_tick_after"] = 8
+        with self.assertRaises(lab.LabError):
+            self.parse()
+
+    def test_client_only_refused(self):
+        self.value["serverAuthoritative"] = False
+        with self.assertRaises(lab.LabError):
+            self.parse()
+
+
+if __name__ == "__main__":
+    unittest.main()

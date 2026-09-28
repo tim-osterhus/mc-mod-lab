@@ -71,7 +71,7 @@ public final class ScenarioObservers {
         }
 
         class_746 player = client.field_1724;
-        return inventorySnapshot(player.method_31548(), null);
+        return inventorySnapshot(player.method_31548(), null, player.method_5715());
     }
 
     public static Optional<InventorySnapshot> playerInventoryServer(
@@ -79,10 +79,10 @@ public final class ScenarioObservers {
         if (server == null || !server.method_18854() || playerId == null) return Optional.empty();
         net.minecraft.class_3222 player = server.method_3760().method_14602(playerId);
         if (player == null) return Optional.empty();
-        return inventorySnapshot(player.method_31548(), (long) server.method_3780());
+        return inventorySnapshot(player.method_31548(), (long) server.method_3780(), player.method_5715());
     }
 
-    private static Optional<InventorySnapshot> inventorySnapshot(class_1661 inventory, Long tick) {
+    private static Optional<InventorySnapshot> inventorySnapshot(class_1661 inventory, Long tick, boolean crouching) {
         ArrayList<ItemSnapshot> stacks = new ArrayList<ItemSnapshot>(MAX_INVENTORY_STACKS);
         boolean truncated = appendStacks(stacks, inventory.field_7547, "main");
         if (!truncated) {
@@ -91,7 +91,7 @@ public final class ScenarioObservers {
         if (!truncated) {
             truncated = appendStacks(stacks, inventory.field_7544, "offhand");
         }
-        return Optional.of(new InventorySnapshot(stacks, truncated, tick));
+        return Optional.of(new InventorySnapshot(stacks, truncated, tick, crouching));
     }
 
     /**
@@ -123,6 +123,16 @@ public final class ScenarioObservers {
         }
     }
 
+    static com.google.gson.JsonObject storageFixture(net.minecraft.class_1132 server,
+            net.minecraft.class_3218 level, java.util.UUID playerId, int x, int y, int z) {
+        if (!FabricLoader.getInstance().isModLoaded("aura")) return null;
+        try {
+            return AuraScenarioObservers.storageFixture(server, level, playerId, x, y, z);
+        } catch (NoClassDefFoundError | NoSuchMethodError incompatibleAura) {
+            return null;
+        }
+    }
+
     private static boolean appendStacks(List<ItemSnapshot> output, List<class_1799> stacks, String section) {
         for (int slot = 0; slot < stacks.size(); slot++) {
             class_1799 stack = stacks.get(slot);
@@ -140,6 +150,10 @@ public final class ScenarioObservers {
 
     static ItemSnapshot storageEntry(class_1799 stack, int slot, int count) {
         return snapshotItem(stack, "storage", slot, Math.max(0, count));
+    }
+
+    static ItemSnapshot entityItem(class_1799 stack, int index) {
+        return snapshotItem(stack, "ground", index, stack.method_7947());
     }
 
     static String itemId(class_1799 stack) {
@@ -497,13 +511,15 @@ public final class ScenarioObservers {
         public final boolean serverAuthoritative;
         public final String stateSource;
         public final Long serverTick;
+        public final boolean crouching;
 
-        private InventorySnapshot(List<ItemSnapshot> stacks, boolean truncated, Long tick) {
+        private InventorySnapshot(List<ItemSnapshot> stacks, boolean truncated, Long tick, boolean crouching) {
             this.stacks = Collections.unmodifiableList(new ArrayList<ItemSnapshot>(stacks));
             this.truncated = truncated;
             this.serverTick = tick;
             this.serverAuthoritative = tick != null;
             this.stateSource = tick == null ? "client_inventory_cache" : "integrated_server_inventory";
+            this.crouching = crouching;
         }
     }
 

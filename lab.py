@@ -712,7 +712,7 @@ def main(argv=None):
     scenario.add_argument("--artifact", type=Path, required=True)
     scenario.add_argument("--out", type=Path, required=True)
     runtime = commands.add_parser("runtime", help="prepare an isolated packaged-client profile")
-    runtime.add_argument("operation", choices=["prepare", "launch"])
+    runtime.add_argument("operation", choices=["prepare", "launch", "resume"])
     runtime.add_argument("--manifest", type=Path, required=True)
     runtime.add_argument("--out", type=Path)
     runtime.add_argument("--profile", type=Path)
@@ -766,7 +766,7 @@ def main(argv=None):
             if args.profile is None or args.scenario is None or args.out is not None:
                 raise LabError("runtime launch requires --manifest, --profile and --scenario")
             from runtime_launch import launch
-            result = launch(args.manifest, args.profile, args.scenario)
+            result = launch(args.manifest, args.profile, args.scenario, resume=args.operation == "resume")
             print(json.dumps({"status": result["status"], "scenario_status": result["scenario_status"],
                               "cleanup": result["cleanup"]["status"]}))
             return 0 if result["status"] == "pass" else 2

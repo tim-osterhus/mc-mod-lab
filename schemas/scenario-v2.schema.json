@@ -70,6 +70,14 @@
     },
     "typed_observation": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "radius"],
+         "properties": {"type": {"const": "ground_entities"}, "radius": {"type": "integer", "minimum": 1, "maximum": 16}}},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "x", "y", "z"],
+          "properties": {"type": {"const": "aura_storage_fixture"},
+            "x": {"$ref": "#/$defs/x"}, "y": {"$ref": "#/$defs/y"}, "z": {"$ref": "#/$defs/x"}}
+        },
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "x", "y", "z", "target_y"],
@@ -114,6 +122,8 @@
     },
     "action": {
       "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["type", "pressed"],
+         "properties": {"type": {"const": "set_crouch"}, "pressed": {"type": "boolean"}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "key"],
@@ -176,6 +186,18 @@
     },
     "require": {
       "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "before", "after", "direction", "count", "component_types", "transactions"],
+          "properties": {"type": {"const": "storage_transfer"},
+            "before": {"$ref": "#/$defs/id"}, "after": {"$ref": "#/$defs/id"},
+            "direction": {"enum": ["deposit", "withdraw"]},
+            "count": {"type": "integer", "minimum": 0, "maximum": 4096},
+            "component_types": {"type": "integer", "minimum": 0, "maximum": 64},
+            "transactions": {"type": "integer", "minimum": 0, "maximum": 64}}
+        },
+        {"type": "object", "additionalProperties": false, "required": ["type", "equals"],
+         "properties": {"type": {"const": "player_crouching"}, "equals": {"type": "boolean"}}},
         {
           "type": "object", "additionalProperties": false,
           "required": ["type", "before", "after", "end", "mode", "expected_aura"],
