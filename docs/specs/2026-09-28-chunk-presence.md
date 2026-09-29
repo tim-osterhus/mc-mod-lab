@@ -1,7 +1,7 @@
 # Passive Chunk Presence: Separate Developer Gate
 
-Status: public candidate has a bounded live technical probe and independent
-raw/source review; not published. This follow-up is
+Status: public source has a bounded live technical probe and independent
+raw/source review. This follow-up is
 separate from the candidate07 visible-input bridge and its prepared profile04.
 It is not an Aura product change, an action, or part of the B01 Survival actor.
 The distinct candidate08 JAR is
