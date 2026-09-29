@@ -94,6 +94,24 @@ class ScenarioV2Tests(unittest.TestCase):
             scenario_v2.run(self.identity_file, self.scenario_file, self.artifact, self.root / "output")
         self.assertFalse((self.root / "output").exists())
 
+    def test_capture_label_is_pid_derived_and_not_a_scripted_action(self):
+        label = "MC Mod Lab Minecraft PID 123"
+        with patch.object(scenario_v2, "scenario_request", return_value={"result": {
+                "action": "capture_window_label", "status": "input_dispatched",
+                "inputCalls": 1, "detail": label}}) as request:
+            self.assertEqual(scenario_v2.label_capture_window(self.identity), label)
+            request.assert_called_once_with(self.identity, "action", "capture_window_label", {})
+        with patch.object(scenario_v2, "scenario_request", return_value={"result": {
+                "inputCalls": 1, "detail": "MC Mod Lab Minecraft PID 999"}}):
+            with self.assertRaises(lab.LabError):
+                scenario_v2.label_capture_window(self.identity)
+        self.identity["pid"] = True
+        with self.assertRaises(lab.LabError):
+            scenario_v2.label_capture_window(self.identity)
+        self.scenario["steps"][0] = {"id": "label", "action": {"type": "capture_window_label"}}
+        with self.assertRaises(contracts.ContractError):
+            scenario_v2.validate_scenario(self.scenario)
+
     def test_duplicate_step_ids_rejected(self):
         self.scenario["steps"][1]["id"] = "look"
         with self.assertRaisesRegex(contracts.ContractError, "duplicate"):

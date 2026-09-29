@@ -87,3 +87,28 @@ def block_entity_inventory(value, envelope, spec):
         _item(slot["item"])
         previous = slot["index"]
     return value
+
+
+def chunk_presence(value, envelope, spec):
+    if (not isinstance(value, dict) or set(value) != {
+            "serverTick", "stateSource", "serverAuthoritative", "dimension",
+            "x", "y", "z", "hasChunkAt", "entityTicking"}
+            or value["stateSource"] != "integrated_server_chunk_presence"
+            or value["serverAuthoritative"] is not True
+            or envelope.get("observation_source") != "integrated_server_chunk_presence"
+            or not isinstance(value["dimension"], str)
+            or not REGISTRY_ID.fullmatch(value["dimension"])
+            or len(value["dimension"]) > 128
+            or any(not _integer(value[k], -30000000 if k != "y" else -64,
+                                30000000 if k != "y" else 319) or value[k] != spec[k]
+                   for k in ("x", "y", "z"))
+            or type(value["hasChunkAt"]) is not bool
+            or type(value["entityTicking"]) is not bool):
+        raise lab.LabError("chunk presence is not a bounded server observation")
+    tick = value["serverTick"]
+    if (not _integer(tick, 0, 2 ** 63 - 1)
+            or not _integer(envelope.get("server_tick_before"), 0, 2 ** 63 - 1)
+            or not _integer(envelope.get("server_tick_after"), 0, 2 ** 63 - 1)
+            or envelope["server_tick_before"] != tick or envelope["server_tick_after"] != tick):
+        raise lab.LabError("chunk presence is not from one server tick")
+    return value

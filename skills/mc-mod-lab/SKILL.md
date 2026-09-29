@@ -40,6 +40,12 @@ and a contact sheet, with no automatic visual verdict. Read
 `docs/mapping-lookup.md` for the offline pinned source lookup procedure.
 A private diagnostic bridge is not a supported public backend.
 Unsupported steps must remain unsupported in the report.
+The separate milestone 5a visible-input adapter has bounded technical evidence, not
+Survival acceptance. Never give a policy the bridge token, identity, source,
+save, fixture coordinates, typed inspectors, or direct scenario transport.
+Read `docs/specs/2026-09-27-survival-visible-input-spike.md` before integrating
+an isolated actor; bounded technical smokes do not replace that isolation or
+the fresh-world no-cheat trial.
 
 For the separate deterministic lane, read `docs/gametest.md`. The fixed
 Fabric 1.21.1 GameTest adapter runs only the reviewed packaged Aura conservation

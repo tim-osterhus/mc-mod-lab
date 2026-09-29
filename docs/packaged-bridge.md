@@ -35,10 +35,13 @@ are not registered. The token is generated at launch, never placed in the
 manifest, scenario, or report; the client process receives only a small
 allowlist of host environment variables plus its port and token.
 
-The typed endpoint accepts only server-tick, player-inventory, and exact-coordinate
-Aura-block reads and four client actions: verified hotbar selection, bounded
-single-item drops, fixture-block aiming, and use against the verified current
-block crosshair. It rejects unknown capabilities, fields, nested values,
+The typed endpoint accepts only bounded, named developer observations and client
+actions. The published action set includes verified hotbar selection, bounded
+single-item drops, and fixture-block aiming and use. The current source build
+additionally includes bounded ordinary visible input and the PID-derived
+`capture_window_label` action. Their bounded technical gates do not establish
+an isolated Survival actor or general gameplay success. The endpoint rejects
+unknown capabilities, fields, nested values,
 duplicate JSON keys, and bodies over 4096 bytes. An action result reports
 input dispatch or rejection, not the requested world transition. The Aura
 adapter is only invoked when the Aura mod is loaded; the generic tick and
@@ -123,6 +126,14 @@ For an offline mapping/source lookup that does not add a second backend, see
 animation mode, described in [scenario v2](scenario-v2.md). The authenticated
 transport, fixed allowlists and exact Minecraft 1.21.1/Aura 0.2.1 artifact
 checks still apply. These inspection views are not Survival-player knowledge.
+The separate [milestone 5a adapter](specs/2026-09-27-survival-visible-input-spike.md)
+adds fixed ordinary client-input verbs to the source build. Bounded real-client
+technical gates do not make them a supported actor driver: verified actor
+isolation and no-cheat fresh-world trials remain due.
+The separate [recording-target label candidate](specs/2026-09-28-recording-label.md)
+adds a trusted, no-parameter PID-derived title action for distinguishing
+concurrent OBS captures; its exact-PID GUI and dimension-transition controls
+passed in the disclosed developer fixture, not as a generic window selector.
 
 The [render-capture checkpoint](checkpoints/2026-09-27-hud-capture.md) adds
 bounded per-render framebuffer evidence and an independent structural validator.

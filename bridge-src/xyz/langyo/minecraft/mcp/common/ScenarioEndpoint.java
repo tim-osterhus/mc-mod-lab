@@ -27,9 +27,9 @@ public final class ScenarioEndpoint implements HttpHandler {
     private static final int MAX_BODY_BYTES = 4096;
     private static final AtomicBoolean ACTION_OUTCOME_UNCERTAIN = new AtomicBoolean(false);
     private static final Set<String> OBSERVATIONS = new HashSet<String>(
-            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "hud_batch", "hud_keyframe"));
+            Arrays.asList("server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "chunk_presence", "hud_batch", "hud_keyframe"));
     private static final Set<String> ACTIONS = new HashSet<String>(
-            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop", "animation_start", "animation_stop"));
+            Arrays.asList("select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "visible_key", "visible_pulse", "visible_look", "capture_window_label", "hud_start", "hud_stop", "animation_start", "animation_stop"));
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -79,6 +79,7 @@ public final class ScenarioEndpoint implements HttpHandler {
                             if ("aura_block_server".equals(request.name)
                                     || "ground_entities".equals(request.name)
                                     || "block_entity_inventory".equals(request.name)
+                                    || "chunk_presence".equals(request.name)
                                     || "aura_accessories".equals(request.name)
                                     || "aura_storage_fixture".equals(request.name)
                                     || "aura_pump_pair".equals(request.name)
@@ -159,6 +160,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                 ? GroundEntityObservers.observe(server, playerId, request.radius).orElse(null)
                 : "block_entity_inventory".equals(request.name)
                 ? DeveloperInspectors.blockEntityInventory(server, level, playerId, request.x, request.y, request.z)
+                : "chunk_presence".equals(request.name)
+                ? chunkPresence(server, level, playerId, request)
                 : "aura_storage_fixture".equals(request.name)
                 ? ScenarioObservers.storageFixture(server, level, playerId, request.x, request.y, request.z)
                 : "aura_pump_pair".equals(request.name)
@@ -166,12 +169,32 @@ public final class ScenarioEndpoint implements HttpHandler {
                 : ScenarioObservers.auraAtServer(level, request.x, request.y, request.z).orElse(null);
         result.addProperty("server_tick_after", server.method_3780());
         result.addProperty("observation_source", inventory ? "integrated_server_inventory"
+                : "chunk_presence".equals(request.name) ? "integrated_server_chunk_presence"
                 : "integrated_server_block_entity");
         if (payload != null) {
             result.addProperty("status", "ok");
             result.add("result", GSON.toJsonTree(payload));
         }
         return result;
+    }
+
+    private static JsonObject chunkPresence(net.minecraft.class_1132 server, net.minecraft.class_3218 level,
+            java.util.UUID playerId, Request request) {
+        if (level == null || !server.method_18854()) return null;
+        net.minecraft.class_3222 player = server.method_3760().method_14602(playerId);
+        if (player == null || player.method_51469() != level) return null;
+        net.minecraft.class_2338 pos = new net.minecraft.class_2338(request.x, request.y, request.z);
+        JsonObject value = new JsonObject();
+        value.addProperty("serverTick", server.method_3780());
+        value.addProperty("stateSource", "integrated_server_chunk_presence");
+        value.addProperty("serverAuthoritative", true);
+        value.addProperty("dimension", level.method_27983().method_29177().toString());
+        value.addProperty("x", request.x);
+        value.addProperty("y", request.y);
+        value.addProperty("z", request.z);
+        value.addProperty("hasChunkAt", level.method_22340(pos));
+        value.addProperty("entityTicking", level.method_37118(pos));
+        return value;
     }
 
     private static JsonObject pumpPair(net.minecraft.class_1132 server, net.minecraft.class_3218 level,
@@ -259,6 +282,14 @@ public final class ScenarioEndpoint implements HttpHandler {
             payload = ScenarioActions.setCrouch(client, request.pressed);
         } else if ("set_forward".equals(request.name)) {
             payload = ScenarioActions.setForward(client, request.pressed);
+        } else if ("visible_key".equals(request.name)) {
+            payload = ScenarioActions.visibleKey(client, request.visibleKey, request.pressed);
+        } else if ("visible_pulse".equals(request.name)) {
+            payload = ScenarioActions.visiblePulse(client, request.visibleKey, request.milliseconds);
+        } else if ("visible_look".equals(request.name)) {
+            payload = ScenarioActions.visibleLook(client, request.yawDelta, request.pitchDelta);
+        } else if ("capture_window_label".equals(request.name)) {
+            payload = ScenarioActions.captureWindowLabel(client);
         } else if ("use_selected_item".equals(request.name)) {
             payload = ScenarioActions.useSelectedItem(client, request.itemId);
         } else if ("select_hotbar".equals(request.name)) {
@@ -312,7 +343,8 @@ public final class ScenarioEndpoint implements HttpHandler {
         Request request = new Request(kind, name);
         if ("server_tick".equals(name) || "player_inventory".equals(name)
                 || "screen_slots".equals(name)
-                || "aura_accessories".equals(name) || "hud_start".equals(name)) {
+                || "aura_accessories".equals(name) || "hud_start".equals(name)
+                || "capture_window_label".equals(name)) {
             fields(params);
         } else if ("animation_start".equals(name)) {
             fields(params, "sample_every");
@@ -339,6 +371,26 @@ public final class ScenarioEndpoint implements HttpHandler {
             if (!params.get("pressed").isJsonPrimitive() || !params.get("pressed").getAsJsonPrimitive().isBoolean())
                 throw new IllegalArgumentException("pressed must be boolean");
             request.pressed = params.get("pressed").getAsBoolean();
+        } else if ("visible_key".equals(name)) {
+            fields(params, "key", "pressed");
+            request.visibleKey = string(params, "key");
+            if (!Set.of("forward", "back", "left", "right", "jump", "sneak", "attack", "use")
+                    .contains(request.visibleKey)) throw new IllegalArgumentException("key unavailable");
+            if (!params.get("pressed").isJsonPrimitive() || !params.get("pressed").getAsJsonPrimitive().isBoolean())
+                throw new IllegalArgumentException("pressed must be boolean");
+            request.pressed = params.get("pressed").getAsBoolean();
+        } else if ("visible_pulse".equals(name)) {
+            fields(params, "key", "milliseconds");
+            request.visibleKey = string(params, "key");
+            if (!Set.of("forward", "back", "left", "right", "jump", "sneak")
+                    .contains(request.visibleKey)) throw new IllegalArgumentException("movement key unavailable");
+            request.milliseconds = integer(params, "milliseconds", 50, 500);
+        } else if ("visible_look".equals(name)) {
+            fields(params, "yaw_delta", "pitch_delta");
+            request.yawDelta = integer(params, "yaw_delta", -15, 15);
+            request.pitchDelta = integer(params, "pitch_delta", -15, 15);
+            if (request.yawDelta == 0 && request.pitchDelta == 0)
+                throw new IllegalArgumentException("zero look unavailable");
         } else if ("drop_selected".equals(name)) {
             fields(params, "count");
             request.count = integer(params, "count", 1, 64);
@@ -354,7 +406,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                 fields(params, "x", "y", "z", "target_y");
                 request.targetY = integer(params, "target_y", -64, 319);
             } else if ("aura_block".equals(name) || "aura_block_server".equals(name)
-                    || "aura_storage_fixture".equals(name) || "block_entity_inventory".equals(name)) {
+                    || "aura_storage_fixture".equals(name) || "block_entity_inventory".equals(name)
+                    || "chunk_presence".equals(name)) {
                 fields(params, "x", "y", "z");
             } else {
                 fields(params, "x", "y", "z", "block_id");
@@ -366,7 +419,8 @@ public final class ScenarioEndpoint implements HttpHandler {
                 if (request.targetY <= request.y || request.targetY > request.y + 15)
                     throw new IllegalArgumentException("target must be within upward fixture range");
             } else if (!"aura_block".equals(name) && !"aura_block_server".equals(name)
-                    && !"aura_storage_fixture".equals(name) && !"block_entity_inventory".equals(name)) {
+                    && !"aura_storage_fixture".equals(name) && !"block_entity_inventory".equals(name)
+                    && !"chunk_presence".equals(name)) {
                 request.blockId = registryId(params, "block_id");
             }
         }
@@ -490,7 +544,11 @@ public final class ScenarioEndpoint implements HttpHandler {
         int count;
         String itemId;
         String blockId;
+        String visibleKey;
+        int milliseconds;
         boolean pressed;
+        int yawDelta;
+        int pitchDelta;
 
         Request(String kind, String name) {
             this.kind = kind;

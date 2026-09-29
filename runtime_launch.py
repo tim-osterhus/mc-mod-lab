@@ -247,7 +247,7 @@ def _verify_storage_resume(identity, previous_report, destination):
     return {"status": "pass" if comparisons else "not_applicable", "fixtures": len(comparisons)}
 
 
-def launch(manifest_path, profile_path, scenario_path, resume=False):
+def launch(manifest_path, profile_path, scenario_path, resume=False, technical_smoke=None):
     manifest = contracts.load(manifest_path)
     contracts.schema_check(manifest, "runtime-profile")
     profile = Path(profile_path)
@@ -276,6 +276,9 @@ def launch(manifest_path, profile_path, scenario_path, resume=False):
     if lab.sha256(profile / "java.args") != data["prepared_args_sha256"]:
         raise lab.LabError("prepared Java arguments changed after preparation")
     scenario = scenario_v2.validate_scenario(contracts.load(scenario_path))
+    if technical_smoke is not None and (resume or manifest["bridge_classification"] != "public_reviewed"
+                                        or manifest["expected_gamemode"] != "survival"):
+        raise lab.LabError("technical smoke requires a fresh reviewed Survival profile")
     target = next(item for item in data["mods"] if item["role"] == "target")
     if (scenario["fixture"] != data["fixture_id"]
             or scenario["runtime"]["mod_id"] != target["mod_id"]
@@ -344,10 +347,17 @@ def launch(manifest_path, profile_path, scenario_path, resume=False):
                 previous_report = contracts.load(profile / receipt["run_directory"] / "scenario-evidence" / "report.json")
                 output["storage_resume"] = _verify_storage_resume(identity, previous_report, run / "storage-continuity.json")
             artifact = profile / "game" / "mods" / target["file"]
-            result = scenario_v2.run(run / "identity.json", scenario_path, artifact,
-                                     run / "scenario-evidence", cancel_event=cancel)
-            output["scenario_status"] = result["status"]
-            output["status"] = result["status"]
+            if technical_smoke is None:
+                result = scenario_v2.run(run / "identity.json", scenario_path, artifact,
+                                         run / "scenario-evidence", cancel_event=cancel)
+                output["scenario_status"] = result["status"]
+                output["status"] = result["status"]
+            else:
+                result = technical_smoke(identity, artifact, run, cancel)
+                if not isinstance(result, dict) or result.get("status") not in {"fail", "inconclusive"}:
+                    raise lab.LabError("technical smoke returned an invalid status", "fail")
+                output["technical_smoke"] = result
+                output["status"] = result["status"]
     except (lab.LabError, OSError, subprocess.SubprocessError) as exc:
         output["status"] = exc.status if isinstance(exc, lab.LabError) else "unsupported"
         output["reason"] = (str(exc) if isinstance(exc, lab.LabError)

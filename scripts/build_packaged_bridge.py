@@ -154,7 +154,8 @@ def hardened_http(source):
                 if (params.size() != 0) throw new IllegalArgumentException("unexpected public parameter");
             } else if ("press_key".equals(cmd)) {
                 if (params.size() != 1 || !params.has("key")
-                        || !java.util.Arrays.asList("Enter", "Escape", "E", "Tab", "B")
+                        || !java.util.Arrays.asList("Enter", "Escape", "E", "Tab", "B",
+                            "Q", "1", "2", "3", "4", "5", "6", "7", "8", "9")
                             .contains(params.get("key").getAsString())) {
                     throw new IllegalArgumentException("key is outside public allowlist");
                 }
@@ -244,7 +245,8 @@ def build(args):
         path.write_text(transformed, encoding="utf-8")
         sources.append(path)
     for name in ("ScenarioEndpoint.java", "ScenarioObservers.java", "DeveloperInspectors.java", "AuraScenarioObservers.java", "GroundEntityObservers.java",
-                 "AuraAccessoryObservers.java", "HudTraceRecorder.java", "hudmixin/HudTraceMixin.java"):
+                 "AuraAccessoryObservers.java", "HudTraceRecorder.java", "hudmixin/HudTraceMixin.java",
+                 "hudmixin/CaptureWindowLabelMixin.java", "hudmixin/VisibleHeldAttackMixin.java"):
         sources.append(ROOT / "bridge-src/xyz/langyo/minecraft/mcp/common" / name)
     sources.append(ROOT / "bridge-src/ScenarioActions.java")
     for source in sources:
@@ -277,7 +279,8 @@ def build(args):
     with zipfile.ZipFile(output) as archive:
         for name in ("McpHttpServer", "ReflectedInputHandler", "ScenarioEndpoint",
                      "ScenarioActions", "ScenarioObservers", "DeveloperInspectors", "AuraScenarioObservers", "GroundEntityObservers",
-                     "AuraAccessoryObservers", "HudTraceRecorder", "hudmixin/HudTraceMixin"):
+                     "AuraAccessoryObservers", "HudTraceRecorder", "hudmixin/HudTraceMixin",
+                     "hudmixin/CaptureWindowLabelMixin", "hudmixin/VisibleHeldAttackMixin"):
             if not archive.read("xyz/langyo/minecraft/mcp/common/" + name + ".class"):
                 raise ValueError("packaged class missing from derivative")
     return digest(output)

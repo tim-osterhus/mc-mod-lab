@@ -21,6 +21,12 @@ sensing or automatic visual approval. [Mapping lookup](docs/mapping-lookup.md)
 remains an offline, hash-pinned build-maintenance task.
 The B01 fresh-world Survival policy still needs a separate bounded
 visible-input adapter; the new inspection outputs remain evaluator-only.
+The [milestone 5a visible-input adapter](docs/specs/2026-09-27-survival-visible-input-spike.md)
+now specifies a pixel-only actor boundary over the existing real client. It
+has independently reviewed bounded developer technical evidence but no isolated actor or B01 Survival
+acceptance; do not expose the
+developer inspection routes, bridge token, save, or fixture coordinates to a
+policy.
 
 ## Pinned bridge candidate and safety
 

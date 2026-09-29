@@ -93,7 +93,8 @@ class RuntimeLaunchTests(unittest.TestCase):
 
     def launch_with_stubs(self, profile=None, scenario_file=None, port=9875,
                           scenario_status="pass", monitor_cancel=False,
-                          cleanup_status="pass", scenario_error=None):
+                          cleanup_status="pass", scenario_error=None,
+                          technical_smoke=None):
         profile = profile or self.profile
         scenario_file = scenario_file or self.write_scenario(profile)
         observed = {}
@@ -116,6 +117,7 @@ class RuntimeLaunchTests(unittest.TestCase):
             return {"pid": selected.pid}
 
         def run_scenario(*_args, cancel_event=None, **_kwargs):
+            observed["scenario_called"] = True
             observed["cancel_seen"] = cancel_event.is_set()
             if scenario_error is not None:
                 raise scenario_error
@@ -146,7 +148,8 @@ class RuntimeLaunchTests(unittest.TestCase):
              patch.object(runtime_launch, "_monitor", side_effect=monitor), \
              patch.object(runtime_launch.threading, "Thread", InlineThread), \
              patch.object(runtime_launch.platform, "system", return_value="Windows"):
-            result = runtime_launch.launch(self.manifest_file, profile, scenario_file)
+            result = runtime_launch.launch(self.manifest_file, profile, scenario_file,
+                                           technical_smoke=technical_smoke)
         self.assertEqual(observed["popen_kwargs"]["creationflags"], 0x08000000)
         return result, observed
 
@@ -242,6 +245,47 @@ class RuntimeLaunchTests(unittest.TestCase):
         self.assertEqual(result["public_bridge_security"], {"status": "pass"})
         self.assertEqual(result["status"], "pass")
         probe.assert_called_once_with({"pid": 65432})
+
+    def test_technical_smoke_uses_same_owned_launch_without_running_scenario(self):
+        self.manifest["bridge_classification"] = "public_reviewed"
+        self.manifest["expected_gamemode"] = "survival"
+        lab.write_json(self.manifest_file, self.manifest)
+        profile = self.make_profile("prepared-smoke")
+        scenario = self.write_scenario(profile)
+        seen = []
+
+        def smoke(identity, artifact, run, cancel):
+            seen.append((identity["pid"], artifact, run, cancel.is_set(),
+                         bool(os.environ.get("MC_MOD_LAB_TOKEN"))))
+            return {"status": "inconclusive"}
+
+        with patch.object(runtime_launch, "_probe_public_bridge", return_value={"status": "pass"}):
+            result, observed = self.launch_with_stubs(profile=profile, scenario_file=scenario,
+                                                      technical_smoke=smoke)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertEqual(result["scenario_status"], "not_run")
+        self.assertNotIn("scenario_called", observed)
+        self.assertEqual(seen, [(65432, profile / "game" / "mods" / "aura.jar",
+                                 profile, False, True)])
+        self.assertFalse((profile / "save-checkpoint.json").exists())
+
+    def test_technical_smoke_rejects_non_survival_profile_before_spawn(self):
+        with patch.object(runtime_launch.subprocess, "Popen") as spawn:
+            with self.assertRaisesRegex(lab.LabError, "reviewed Survival"):
+                runtime_launch.launch(self.manifest_file, self.profile, self.scenario_file,
+                                      technical_smoke=lambda *_args: {"status": "inconclusive"})
+        spawn.assert_not_called()
+
+    def test_technical_smoke_rejects_unstructured_result_and_closes_client(self):
+        self.manifest["bridge_classification"] = "public_reviewed"
+        self.manifest["expected_gamemode"] = "survival"
+        lab.write_json(self.manifest_file, self.manifest)
+        profile = self.make_profile("prepared-smoke-invalid")
+        with patch.object(runtime_launch, "_probe_public_bridge", return_value={"status": "pass"}):
+            result, _observed = self.launch_with_stubs(
+                profile=profile, technical_smoke=lambda *_args: None)
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["cleanup"]["status"], "pass")
 
     def test_child_environment_does_not_inherit_host_secrets(self):
         with patch.dict(os.environ, {"MC_MOD_LAB_TEST_SECRET": "CANARY_HOST_SECRET"}):

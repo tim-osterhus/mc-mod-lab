@@ -17,8 +17,10 @@ import lab
 
 SUPPORTED_OBSERVATIONS = {"world", "player", "screen", "frame"}
 SUPPORTED_ACTIONS = {"press_key", "click", "click_button_index", "use_item"}
-SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "hud_batch"}
+SCENARIO_OBSERVATIONS = {"server_tick", "player_inventory", "aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "aura_accessories", "ground_entities", "screen_slots", "block_entity_inventory", "chunk_presence", "hud_batch"}
 SCENARIO_ACTIONS = {"select_hotbar", "drop_selected", "aim_at_block", "use_item_at_block", "use_selected_item", "set_crouch", "set_forward", "hud_start", "hud_stop", "animation_start", "animation_stop"}
+POLICY_ACTIONS = {"visible_key", "visible_pulse", "visible_look"}
+CAPTURE_ACTIONS = {"capture_window_label"}
 SUPPORTED_REQUIREMENTS = {"screen_class", "world_name", "aura_increase", "inventory_conservation", "pump_accounting", "player_crouching", "storage_transfer", "stationary_entity_impulse", "accessory_slots"}
 MAX_SCENARIO_RESPONSE_BYTES = 64 * 1024
 UNCERTAIN_MARKER = ".mc-mod-lab-uncertain"
@@ -194,7 +196,7 @@ def scenario_request(identity, kind, name, params):
         raise lab.LabError("scenario request kind is unavailable")
     if kind == "observe" and name not in SCENARIO_OBSERVATIONS:
         raise lab.LabError("scenario observer capability is unavailable")
-    if kind == "action" and name not in SCENARIO_ACTIONS:
+    if kind == "action" and name not in SCENARIO_ACTIONS | POLICY_ACTIONS | CAPTURE_ACTIONS:
         raise lab.LabError("scenario action capability is unavailable")
     token = os.environ.get("MC_MOD_LAB_TOKEN", "")
     if len(token) < 32 or "\n" in token or "\r" in token:
@@ -257,9 +259,21 @@ def _mark_uncertain(identity):
         encoding="utf-8")
 
 
+def label_capture_window(identity):
+    """Name only the selected live client; this is not an OBS target proof."""
+    pid = identity.get("pid")
+    if type(pid) is not int or pid <= 0:
+        raise lab.LabError("selected client PID is invalid")
+    label = f"MC Mod Lab Minecraft PID {pid}"
+    result = scenario_request(identity, "action", "capture_window_label", {})["result"]
+    if result.get("detail") != label or result.get("inputCalls") != 1:
+        raise lab.LabError("capture label did not match selected client", "fail")
+    return label
+
+
 def _scenario_observation(identity, spec):
     name = spec["type"]
-    if name in {"aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "block_entity_inventory"}:
+    if name in {"aura_block", "aura_block_server", "aura_pump_pair", "aura_storage_fixture", "block_entity_inventory", "chunk_presence"}:
         params = {key: spec[key] for key in ("x", "y", "z")}
         if name == "aura_pump_pair":
             params["target_y"] = spec["target_y"]
@@ -277,10 +291,14 @@ def _scenario_observation(identity, spec):
         value = _storage_fixture_snapshot(value, envelope, spec)
     if name == "aura_pump_pair":
         value = _pump_pair_snapshot(value, envelope, spec)
-    if name in {"screen_slots", "block_entity_inventory"}:
+    if name in {"screen_slots", "block_entity_inventory", "chunk_presence"}:
         import developer_inspection
-        value = (developer_inspection.screen_slots(value, envelope) if name == "screen_slots"
-                 else developer_inspection.block_entity_inventory(value, envelope, spec))
+        if name == "screen_slots":
+            value = developer_inspection.screen_slots(value, envelope)
+        elif name == "block_entity_inventory":
+            value = developer_inspection.block_entity_inventory(value, envelope, spec)
+        else:
+            value = developer_inspection.chunk_presence(value, envelope, spec)
     if name == "server_tick":
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise lab.LabError("server tick observation is unavailable")
@@ -866,7 +884,7 @@ def _step(identity, step, out, keyframes_left, observations, wall_deadline, canc
                     typed_evidence.append({"type": name, "server_tick": value,
                                            "server_tick_before": envelope.get("server_tick_before"),
                                            "server_tick_after": envelope.get("server_tick_after")})
-                elif name in {"screen_slots", "block_entity_inventory"}:
+                elif name in {"screen_slots", "block_entity_inventory", "chunk_presence"}:
                     typed_evidence.append({"type": name, **value})
                 elif name in {"aura_pump_pair", "aura_storage_fixture", "ground_entities", "aura_accessories"}:
                     typed_evidence.append(value)

@@ -11,6 +11,7 @@ import net.minecraft.class_2338;
 import net.minecraft.class_239;
 import net.minecraft.class_2868;
 import net.minecraft.class_2960;
+import net.minecraft.class_304;
 import net.minecraft.class_3965;
 import net.minecraft.class_4970;
 import net.minecraft.class_634;
@@ -18,6 +19,8 @@ import net.minecraft.class_636;
 import net.minecraft.class_746;
 import net.minecraft.class_7923;
 import net.minecraft.class_310;
+import net.minecraft.class_3675;
+import net.minecraft.class_1041;
 
 /**
  * Narrow real-client actions for the Minecraft 1.21.1 intermediary runtime.
@@ -32,6 +35,12 @@ public final class ScenarioActions {
     private static final int HOTBAR_SIZE = 9;
     private static final int MAX_DROP_COUNT = 64;
     private static final int MAX_REGISTRY_ID_LENGTH = 255;
+    private static final long MAX_VISIBLE_ATTACK_HOLD_NANOS = 6_000_000_000L;
+    private static volatile class_1041 labeledCaptureWindow;
+    private static volatile long visibleAttackUntilNanos;
+    private static volatile boolean visibleAttackRequested;
+    private static class_304 visiblePulseBinding;
+    private static long visiblePulseUntilNanos;
 
     private ScenarioActions() {
     }
@@ -138,17 +147,151 @@ public final class ScenarioActions {
                 "vanilla forward key state changed; observe server state after normal ticks");
     }
 
+    public static ActionAck visibleKey(class_310 client, String key, boolean pressed) {
+        ActionAck unavailable = requireClient(client, "visible_key", true);
+        if (unavailable != null) return unavailable;
+        if (pressed && client.field_1755 != null)
+            return rejected("visible_key", "world input requires no open screen");
+        class_304 binding = switch (key) {
+            case "forward" -> client.field_1690.field_1894;
+            case "back" -> client.field_1690.field_1881;
+            case "left" -> client.field_1690.field_1913;
+            case "right" -> client.field_1690.field_1849;
+            case "jump" -> client.field_1690.field_1903;
+            case "sneak" -> client.field_1690.field_1832;
+            case "attack" -> client.field_1690.field_1886;
+            case "use" -> client.field_1690.field_1904;
+            default -> null;
+        };
+        if (binding == null) return rejected("visible_key", "key is not in the ordinary-input set");
+        if (pressed && "attack".equals(key) && binding.method_1415())
+            return rejected("visible_key", "attack key is unbound");
+        boolean attackEdge = false;
+        if ("attack".equals(key)) {
+            expireVisibleAttack(client);
+            if (pressed) {
+                if (visibleAttackRequested && visibleAttackUntilNanos == 0)
+                    return rejected("visible_key", "attack hold expired; release before pressing again");
+                attackEdge = !visibleAttackRequested;
+                visibleAttackRequested = true;
+            } else {
+                visibleAttackRequested = false;
+                visibleAttackUntilNanos = 0;
+            }
+        }
+        binding.method_23481(pressed);
+        if (attackEdge) {
+            visibleAttackUntilNanos = System.nanoTime() + MAX_VISIBLE_ATTACK_HOLD_NANOS;
+            class_304.method_1420(class_3675.method_15981(binding.method_1428()));
+        }
+        if (!pressed && "attack".equals(key))
+            while (binding.method_1436()) { }
+        return dispatched("visible_key", 1, "bounded vanilla key state dispatched");
+    }
+
+    public static ActionAck visiblePulse(class_310 client, String key, int milliseconds) {
+        ActionAck unavailable = requireClient(client, "visible_pulse", true);
+        if (unavailable != null) return unavailable;
+        if (client.field_1755 != null) return rejected("visible_pulse", "movement requires no open screen");
+        if (milliseconds < 50 || milliseconds > 500)
+            return rejected("visible_pulse", "movement duration is outside 50..500 ms");
+        if (key == null) return rejected("visible_pulse", "key is not a movement input");
+        class_304 binding = switch (key) {
+            case "forward" -> client.field_1690.field_1894;
+            case "back" -> client.field_1690.field_1881;
+            case "left" -> client.field_1690.field_1913;
+            case "right" -> client.field_1690.field_1849;
+            case "jump" -> client.field_1690.field_1903;
+            case "sneak" -> client.field_1690.field_1832;
+            default -> null;
+        };
+        if (binding == null) return rejected("visible_pulse", "key is not a movement input");
+        expireVisiblePulse(client);
+        if (visiblePulseBinding != null || binding.method_1434())
+            return rejected("visible_pulse", "movement input is already held");
+        visiblePulseBinding = binding;
+        visiblePulseUntilNanos = System.nanoTime() + milliseconds * 1_000_000L;
+        binding.method_23481(true);
+        return dispatched("visible_pulse", 1, "client-tick bounded movement pulse dispatched");
+    }
+
+    public static ActionAck visibleLook(class_310 client, int yawDelta, int pitchDelta) {
+        ActionAck unavailable = requireClient(client, "visible_look", true);
+        if (unavailable != null) return unavailable;
+        if (client.field_1755 != null) return rejected("visible_look", "look requires no open screen");
+        if (yawDelta < -15 || yawDelta > 15 || pitchDelta < -15 || pitchDelta > 15
+                || yawDelta == 0 && pitchDelta == 0)
+            return rejected("visible_look", "look delta is outside the bounded range");
+        class_746 player = client.field_1724;
+        player.method_36456(player.method_36454() + yawDelta);
+        player.method_36457(Math.max(-90.0f, Math.min(90.0f, player.method_36455() + pitchDelta)));
+        return dispatched("visible_look", 1, "relative local look input dispatched");
+    }
+
+    public static ActionAck captureWindowLabel(class_310 client) {
+        ActionAck unavailable = requireClient(client, "capture_window_label", false);
+        if (unavailable != null) return unavailable;
+        String title = "MC Mod Lab Minecraft PID " + ProcessHandle.current().pid();
+        class_1041 window = client.method_22683();
+        window.method_24286(title);
+        labeledCaptureWindow = window;
+        return dispatched("capture_window_label", 1, title);
+    }
+
+    public static String retainedCaptureWindowTitle(class_1041 window, String requested) {
+        return window == labeledCaptureWindow
+                ? "MC Mod Lab Minecraft PID " + ProcessHandle.current().pid() : requested;
+    }
+
+    public static boolean permitsHeldAttackWithoutGrab(class_310 client) {
+        if (client != null && client.method_18854()) expireVisibleAttack(client);
+        return client != null && client.method_18854() && ReflectionHelper.isMcpControlMode()
+                && visibleAttackRequested && visibleAttackUntilNanos != 0
+                && client.field_1724 != null && client.field_1687 != null
+                && client.field_1761 != null && client.field_1755 == null
+                && client.field_1690.field_1886.method_1434();
+    }
+
+    public static void expireVisibleAttack(class_310 client) {
+        if (visibleAttackRequested && visibleAttackUntilNanos != 0
+                && System.nanoTime() >= visibleAttackUntilNanos) {
+            visibleAttackUntilNanos = 0;
+            class_304 attack = client.field_1690.field_1886;
+            attack.method_23481(false);
+            while (attack.method_1436()) { }
+        }
+    }
+
+    public static void expireVisiblePulse(class_310 client) {
+        if (visiblePulseBinding != null && (System.nanoTime() >= visiblePulseUntilNanos
+                || !ReflectionHelper.isMcpControlMode() || client.field_1755 != null)) {
+            visiblePulseBinding.method_23481(false);
+            visiblePulseBinding = null;
+            visiblePulseUntilNanos = 0;
+        }
+    }
+
     public static void releaseHeldInputs() {
         Object instance = ReflectionHelper.getMinecraftInstance();
         if (!(instance instanceof class_310 client)) {
             throw new IllegalStateException("client unavailable for input release");
         }
         Runnable release = () -> {
-            client.field_1690.field_1894.method_23481(false);
-            client.field_1690.field_1832.method_23481(false);
-            if (client.field_1690.field_1894.method_1434()
-                    || client.field_1690.field_1832.method_1434()) {
-                throw new IllegalStateException("forward/crouch input release was not confirmed");
+            visibleAttackRequested = false;
+            visibleAttackUntilNanos = 0;
+            visiblePulseBinding = null;
+            visiblePulseUntilNanos = 0;
+            class_304[] bindings = {
+                client.field_1690.field_1894, client.field_1690.field_1881,
+                client.field_1690.field_1913, client.field_1690.field_1849,
+                client.field_1690.field_1903, client.field_1690.field_1832,
+                client.field_1690.field_1886, client.field_1690.field_1904
+            };
+            for (class_304 binding : bindings) binding.method_23481(false);
+            while (client.field_1690.field_1886.method_1436()) { }
+            for (class_304 binding : bindings) {
+                if (binding.method_1434())
+                    throw new IllegalStateException("held input release was not confirmed");
             }
         };
         if (client.method_18854()) {

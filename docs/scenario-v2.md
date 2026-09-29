@@ -99,6 +99,18 @@ snapshot is not server-authoritative and cannot satisfy exact inventory
 assertions. A server block-entity snapshot is developer inspection, not a
 Survival player's observed knowledge.
 
+`chunk_presence` is a separate developer-only, one-position server observation
+for an explicit bounded BlockPos in the current player dimension. It returns
+the exact `Level.hasChunkAt` boolean used by Aura's link guards and a distinct
+`ServerLevel.isPositionEntityTicking` boolean, with one-tick provenance. It
+does not retrieve a chunk, block state, block entity, or target contents and
+calls no load-promoting API. A bounded live local/far repeat control passed;
+it does not prove all chunks can never be promoted by unrelated activity.
+An `execute if loaded` result is not a
+substitute for `hasChunkAt`; neither boolean is player knowledge. The
+[chunk-presence gate](specs/2026-09-28-chunk-presence.md) is separate from
+the private seven-route proof.
+
 `capture_animation` takes `seconds` (2-10), `sample_every` (20-60 rendered
 frames), and `require_motion` (boolean). It retains bounded first/sampled/last
 PNGs, complete per-render sequence metadata, hashes, and a contact sheet. The
@@ -155,3 +167,7 @@ lock in place for manual inspection; never delete it automatically or take
 control of that profile from another session. The scenario-level `save-exit`
 cleanup name remains unsupported; normal close and receipt-bound reopen belong
 to `runtime launch` and `runtime resume`, not the already-running-client runner.
+The milestone 5a `visible_key`, `visible_pulse`, and `visible_look` bridge verbs
+are not scenario-v2 script action types. Their pixel-only broker and still-
+unmet actor isolation boundary are specified separately in
+[the Survival visible-input spike](specs/2026-09-27-survival-visible-input-spike.md).
