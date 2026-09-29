@@ -125,6 +125,51 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["first_frame_sha256"], hashlib.sha256(b"frame").hexdigest())
         self.assertEqual(len(result["action_trace"]), 1)
 
+    def test_later_guide_candidate_is_evaluator_only_and_hash_bound(self):
+        import hashlib
+        report = {"guide_frame": {"status": "not_observed", "probe_count": 0}}
+        capture = subject.guide_frame_capture({"pid": 5, "port": 9875}, self.root, report)
+        with patch.object(subject.lab, "command", side_effect=[
+                {"screen": "InventoryScreen"}, {"screen": "GuiBookLanding"},
+                {"screen": "GuiBookLanding"}, {"screen": "GuiBookLanding"}]) as command:
+            self.assertEqual(capture(lambda: b"not-yet"), b"not-yet")
+            self.assertEqual(report["guide_frame"]["status"], "not_observed")
+            self.assertEqual(capture(lambda: b"guide-pixels"), b"guide-pixels")
+        self.assertEqual(command.call_count, 4)
+        self.assertEqual((self.root / "guide-open.png").read_bytes(), b"guide-pixels")
+        self.assertEqual(report["guide_frame"]["sha256"],
+                         hashlib.sha256(b"guide-pixels").hexdigest())
+        self.assertEqual(report["guide_frame"]["probe_count"], 2)
+        self.assertEqual(report["guide_frame"]["visual_status"], "not_reviewed")
+        with patch.object(subject.lab, "command") as command:
+            self.assertEqual(capture(lambda: b"later"), b"later")
+        command.assert_not_called()
+
+    def test_guide_capture_remains_active_after_ordinary_gui_frames(self):
+        report = {"guide_frame": {"status": "not_observed", "probe_count": 0}}
+        capture = subject.guide_frame_capture({"pid": 5, "port": 9875}, self.root, report)
+        with patch.object(subject.lab, "command", return_value={"screen": None}) as command:
+            for _ in range(20):
+                self.assertEqual(capture(lambda: b"world"), b"world")
+        self.assertEqual(command.call_count, 40)
+        self.assertEqual(report["guide_frame"]["status"], "not_observed")
+        with patch.object(subject.lab, "command", return_value={"screen": "GuiBookLanding"}):
+            self.assertEqual(capture(lambda: b"later-guide"), b"later-guide")
+        self.assertEqual(report["guide_frame"]["status"], "candidate")
+        self.assertEqual(report["guide_frame"]["probe_count"], 21)
+        self.assertEqual(report["guide_frame"]["visual_status"], "not_reviewed")
+        self.assertEqual((self.root / "guide-open.png").read_bytes(), b"later-guide")
+        with patch.object(subject.lab, "command") as command:
+            self.assertEqual(capture(lambda: b"after-candidate"), b"after-candidate")
+        command.assert_not_called()
+
+    def test_guide_probe_malformed_screen_fails_closed(self):
+        report = {"guide_frame": {"status": "not_observed", "probe_count": 0}}
+        capture = subject.guide_frame_capture({"pid": 5, "port": 9875}, self.root, report)
+        with patch.object(subject.lab, "command", return_value={"buttons": []}):
+            with self.assertRaises(subject.lab.LabError):
+                capture(lambda: b"world")
+
 
 if __name__ == "__main__":
     unittest.main()

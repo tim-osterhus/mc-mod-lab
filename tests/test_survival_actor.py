@@ -53,6 +53,22 @@ class SurvivalActorTests(unittest.TestCase):
         self.session.cancel.assert_called_once()
         self.assertEqual(self.broker.handle({"op": "frame"}), {"accepted": False})
 
+    def test_guide_capture_uses_only_actor_requested_frame_after_gui_action(self):
+        self.model.choose.return_value = {"type": "pulse", "key": "use", "milliseconds": 100}
+        capture = Mock(side_effect=lambda frame: frame())
+        broker = subject.ActorBroker(self.session, self.model, guide_capture=capture)
+        self.assertEqual(broker.handle({"op": "frame"}),
+                         {"png": base64.b64encode(PNG).decode("ascii")})
+        capture.assert_not_called()
+        broker.handle({"op": "vision"})
+        broker.handle({"op": "pulse", "key": "use", "milliseconds": 100})
+        self.assertEqual(broker.handle({"op": "frame"}),
+                         {"png": base64.b64encode(PNG).decode("ascii")})
+        capture.assert_called_once()
+        self.assertEqual(broker.history, [{"type": "pulse", "key": "use", "milliseconds": 100}])
+        broker.handle({"op": "vision"})
+        self.model.choose.assert_called_with(PNG, broker.history, (1280, 720))
+
     def test_broker_rejects_malformed_model_actions(self):
         for action in ({"type": "cancel", "extra": True},
                        {"type": "pulse", "key": "forward", "milliseconds": True},

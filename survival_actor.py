@@ -16,7 +16,9 @@ import survival_input
 
 MAX_LINE = 12 * 1024 * 1024
 ACTOR_PATH = Path(__file__).parent / "scripts" / "isolated_survival_actor.py"
-PROMPT = ("Play this Minecraft Survival world using only the screenshot. Read the in-game guide. "
+PROMPT = ("Play this Minecraft Survival world using only the screenshot. Start with ordinary "
+          "resources; if you naturally obtain the in-game guide, open and read it while working "
+          "toward a first Aura circuit. "
           "Return one JSON object with an action: {\"type\":\"look\",\"yaw_delta\":integer,"
           "\"pitch_delta\":integer}, {\"type\":\"pulse\",\"key\":key,\"milliseconds\":integer}, "
           "{\"type\":\"press\",\"key\":key}, {\"type\":\"click\",\"x\":integer,\"y\":integer}, "
@@ -100,7 +102,8 @@ class OllamaVisionModel:
 class ActorBroker:
     """The only holder of the selected identity, token, model and input lease."""
 
-    def __init__(self, session, model, first_frame=None, stopped=None, trace_out=None):
+    def __init__(self, session, model, first_frame=None, stopped=None, trace_out=None,
+                 guide_capture=None):
         self.session = session
         self.model = model
         self.png = None
@@ -110,6 +113,8 @@ class ActorBroker:
         self.terminal = False
         self.actions = 0
         self.first_frame = first_frame
+        self.guide_capture = guide_capture
+        self.guide_probe_pending = False
         self.stopped = stopped or (lambda: False)
 
     def handle(self, request):
@@ -118,7 +123,11 @@ class ActorBroker:
         if type(request) is not dict or self.terminal:
             return {"accepted": False}
         if request == {"op": "frame"} and self.pending is None:
-            self.png = self.session.frame()
+            if self.guide_probe_pending and self.guide_capture is not None:
+                self.png = self.guide_capture(self.session.frame)
+            else:
+                self.png = self.session.frame()
+            self.guide_probe_pending = False
             if self.first_frame is not None:
                 self.first_frame(self.png)
                 self.first_frame = None
@@ -152,6 +161,9 @@ class ActorBroker:
         self.actions += 1
         self.history.append(action)
         self.trace.append({"at_utc": time.time(), "action": action})
+        if (action["type"] == "click" or action["type"] == "press"
+                or (action["type"] == "pulse" and action["key"] == "use")):
+            self.guide_probe_pending = True
         self.png = None
         self.pending = None
         return {"accepted": True}
@@ -271,11 +283,11 @@ def broker_probe(session, model, expected_source_hash=None):
 
 
 def run_actor(session, model, cancel, wall_seconds=600, first_frame=None,
-              expected_source_hash=None, trace_out=None):
+              expected_source_hash=None, trace_out=None, guide_capture=None):
     deadline = time.monotonic() + wall_seconds
     broker = ActorBroker(session, model, first_frame,
                          stopped=lambda: cancel.is_set() or time.monotonic() >= deadline,
-                         trace_out=trace_out)
+                         trace_out=trace_out, guide_capture=guide_capture)
     inbox = queue.Queue(maxsize=2)
     timer = threading.Timer(wall_seconds, cancel.set)
     process = None

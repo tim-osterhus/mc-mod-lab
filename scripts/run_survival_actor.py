@@ -18,6 +18,35 @@ from scripts.smoke_survival_input import AURA_SHA256, FRAME_SIZE, MOVEMENT_PULSE
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GUIDE_SCREEN = "GuiBookLanding"
+
+
+def guide_frame_capture(identity, out, report):
+    path = out / "guide-open.png"
+
+    def screen():
+        value = lab.command(identity, "get_screen_buttons")
+        if (not isinstance(value, dict) or "screen" not in value
+                or (value.get("screen") is not None and not isinstance(value["screen"], str))):
+            raise lab.LabError("guide screen observation is unavailable", "fail")
+        return value["screen"]
+
+    def capture(frame):
+        evidence = report["guide_frame"]
+        if evidence["status"] == "candidate":
+            return frame()
+        evidence["probe_count"] += 1
+        before = screen()
+        png = frame()
+        after = screen()
+        if before == after == GUIDE_SCREEN:
+            path.write_bytes(png)
+            evidence.update(status="candidate", file=path.name,
+                            sha256=lab.sha256(path),
+                            screen_class=GUIDE_SCREEN, visual_status="not_reviewed")
+        return png
+
+    return capture
 
 
 def preflight(args):
@@ -49,7 +78,8 @@ def trial(identity, artifact, run, cancel, model, aura_source):
     report = {"status": "fail", "reason": "isolated actor did not start",
               "actor_isolation": {"status": "not_run"},
               "broker_denials": {"status": "not_run"},
-              "model_name": model.name, "action_trace": []}
+              "model_name": model.name, "action_trace": [],
+              "guide_frame": {"status": "not_observed", "probe_count": 0}}
     out = run / "survival-actor"
     out.mkdir(exist_ok=True)
     try:
@@ -72,7 +102,8 @@ def trial(identity, artifact, run, cancel, model, aura_source):
                 report["broker_denials"] = survival_actor.broker_probe(session, model, source_hash)
                 report.update(survival_actor.run_actor(
                     session, model, cancel, first_frame=lambda png: first_frame.write_bytes(png),
-                    expected_source_hash=source_hash, trace_out=report["action_trace"]))
+                    expected_source_hash=source_hash, trace_out=report["action_trace"],
+                    guide_capture=guide_frame_capture(identity, out, report)))
         finally:
             report["neutral_release"] = session.cleanup_status
             report["actor_source_after_sha256"] = survival_actor.actor_source_hash()

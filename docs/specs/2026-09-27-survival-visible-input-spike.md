@@ -75,7 +75,7 @@ sandbox/process review, and evidence that the policy decision point has no
 privileged source or hidden game-state route. The model receives the PNG and
 bounded generic action history with no tool list or
 privileged telemetry; its JSON output must pass the fixed input validator.
-The first actor-visible guide frame is retained as pixel context for later
+The first actor-visible spawn frame is retained as pixel context for later
 vision calls, with no OCR, fixture answer, source lookup or privileged state.
 
 `scripts/run_survival_actor.py` is an owned-launch first-trial entry point.
@@ -88,9 +88,11 @@ explicitly named, already-installed local vision model. It never pulls a
 model or starts Ollama. After client readiness the evaluator checks a fresh
 server-authoritative empty inventory, runs source/save/token/port and broker
 denial probes, then starts `PolicySession`. The first PNG and action trace
-stay in the evaluator's profile evidence with the first-frame SHA-256,
-timestamped trusted action trace, child-source SHA-256, bubblewrap version and neutral-release
-status; raw actor status remains
+stay in the evaluator's profile evidence with the initial-spawn PNG SHA-256,
+timestamped trusted action trace, child-source SHA-256, bubblewrap version and
+neutral-release status. A bounded evaluator-only probe can also retain the
+first detected `GuiBookLanding` PNG after ordinary actor input; raw actor
+status remains
 `inconclusive` until independent guide visibility/gameplay review. Any
 failed isolation, model, seed, input, cancellation or neutral-release gate
 fails closed. A cancellation observed before dispatch denies that action;
@@ -100,9 +102,9 @@ result is sent to the actor.
 
 The NBT checks are a no-cheat/empty-inventory gate, **not proof of a freshly
 generated or unplayed world**. A separate reviewed creation record and clean
-copy chain must establish that provenance before B01. Saving `first-frame.png`
-does not verify that the in-game guide is visible; an independent reviewer
-must inspect that exact frame before accepting a guide-led claim. The current
+copy chain must establish that provenance before B01. `first-frame.png` is the
+actor's initial ordinary-world view, not a guide requirement. The separate
+guide-open candidate still requires independent pixel review. The current
 Java/OBS resource guard does not account for an external model process or GPU
 memory. A future local-model trial needs an explicit model allocation and
 resource observation in addition to the Minecraft client cap.
@@ -110,17 +112,89 @@ resource observation in addition to the Minecraft client cap.
 Current local model inventory contains only an embedding model, not a vision
 model, and the existing technical Survival seed is cheat-enabled and seeded.
 Therefore no fresh guide-led run has been made from this candidate. The next
-leased gate requires a separately reviewed unseeded no-cheat Survival world
-whose guide is visible in the first frame, an explicitly approved installed
-vision model, normal client/OBS cleanup, and independent review of the actor
-trace. One attempt may fail or be inconclusive; five declared vanilla seeds
-and one Aura guide-led action remain the broader acceptance obligation.
+leased gate requires a separately reviewed unseeded no-cheat Survival world,
+an explicitly approved installed vision model, normal client/OBS cleanup, and
+independent review of the actor trace. The earlier Mod Lab wording that
+required the guide in frame one was incorrect: authoritative Aura B01 starts
+with ordinary inventory, then earns the guide before following it to a first
+circuit. One attempt may fail or be
+inconclusive; five declared vanilla seeds and one Aura guide-led action remain
+the broader acceptance obligation.
 Native AstraLight can review actor-visible frames and recordings, but its
 normal workspace/tool permissions are not an isolated B01 policy boundary.
 No scoped in-app PNG-to-fixed-action endpoint is currently available to this
 broker. An OpenAI API model would require separately approved billable access;
 the local Ollama adapter is only an optional offline candidate, not an
 authorization to download or run a new model.
+
+### Fresh-world provenance and guide gate (offline handoff)
+
+The pinned Aura `0.2.1+1.21.1` JAR (SHA-256
+`2290a1a344fa8e1e43d631729b5f88d422923d573db90d1a592945fecc1aacc8`)
+contains `data/aura/patchouli_books/encyclopedia_aura/book.json` with
+`dont_generate_book: true` and custom item `aura:encyclopedia_aura`. Its recipe
+needs one White Aura Crystal and one vanilla Book; the crystal needs one
+Amethyst Shard and eight Gold Nuggets. The inspected artifact and source
+provide no demonstrated first-join grant or no-item guide-opening route.
+[Patchouli's documentation](https://vazkiimods.github.io/Patchouli/docs/patchouli-basics/giving-new/)
+says it does not give books to new players by default; its
+[book format](https://vazkiimods.github.io/Patchouli/docs/reference/book-json/)
+describes `dont_generate_book` as use of a custom item, not a starter grant.
+The prior creative guide-navigation fixture supplied the item, so it cannot
+establish natural fresh-world availability.
+
+`runtime prepare` copies an **already closed save**; it does not generate a
+world. At a future explicit creation lease, use a separate empty game
+directory with reviewed Minecraft 1.21.1/Fabric/Java 21, the pinned Aura JAR,
+Patchouli and other declared dependencies. Record the initially empty `saves`
+directory and exact mod hashes. Through the visible Create World UI, create a
+new Survival world with cheats and Bonus Chest off, no added data packs or
+supplied items/blocks, and a seed predeclared only to the evaluator. Record
+the settings and first spawn as game-window evidence, then close normally
+without collecting resources, commands, creative/spectator mode or save edits.
+Mod Lab does not automate this creation step today. If it cannot be done
+without unauthorized foreground/native input, stop and request a reviewed
+creation method; do not substitute a pre-played save.
+
+Retain the creation recording/log, source `level.dat` SHA-256, declared seed
+and normal-close/lock evidence. Run `survival_seed.inspect_seed` for cheats-off,
+Survival and empty player/ender inventory; independently review creation for
+new-world and Bonus Chest settings. Use this untouched save as the manifest
+`seed_save`. `python lab.py runtime prepare --manifest MANIFEST --out NEW_PROFILE`
+makes a marked copy and records its save-content
+`fixture_sha256`. `scripts.run_survival_actor` rejects a changed copied
+`level.dat` or profile hash before launch and checks authoritative empty
+inventory before actor input. NBT/hash checks alone never prove creation.
+Reject a reused world, source/copy mismatch, cheats, Creative, Bonus Chest,
+seeded inventory/containers or an unreviewed creation session. No fixture
+commands, `/give`, placed guide, hidden recipe/coordinate prompt or post-start
+observer output may make the guide available.
+
+With this artifact and empty inventory, the first actor-visible PNG is
+expected to show the ordinary new world, **not** an open Encyclopedia. Aura
+B01 calls for that same pixel/input actor to acquire wood/tools/food,
+amethyst/gold, craft the crystal and Book, craft the Encyclopedia, then open
+and follow it toward an earned circuit. No starter book, product change or
+setup injection is needed or authorized. This remains a capability hypothesis,
+not a ten-minute success promise; the policy must discover its steps through
+player-visible UI, not source or evaluator notes.
+
+The runner keeps `first-frame.png` and its hash. After a successful actor
+`use`, `press` or GUI `click`, it checks the next actor-requested frame using
+the authenticated evaluator-only `get_screen_buttons` route. Checks remain
+available throughout the existing 600-frame, 10-minute session; ordinary
+inventory and crafting actions do not exhaust a separate guide-probe budget.
+Only `GuiBookLanding` both before and after the same validated PNG request
+retains `guide-open.png`, its SHA-256 and `visual_status: not_reviewed`.
+Screen class, probe count and evaluator result never enter actor messages or
+model prompts. Missing/mismatched screens remain `not_observed`; a screen
+opened and closed between requested frames can be missed, so absence is
+inconclusive. A class match
+alone does not establish readable guide text, natural item acquisition or
+earned progression. Independently review the PNG and complete action,
+inventory and creation provenance before any B01 claim. Backend approval,
+model resource accounting, crash supervision and runtime lease remain separate
+gates, not a new first-frame user decision.
 
 At a future explicit client lease, prepare a fresh reviewed runtime profile
 with the existing `python lab.py runtime prepare` command, then invoke
@@ -129,8 +203,9 @@ with the existing `python lab.py runtime prepare` command, then invoke
 <already-installed-vision-model> --aura-source <existing-Aura-Java-source>`.
 The scenario is only the launch identity preflight; the actor does not receive
 its steps. The private model endpoint must be independently approved and
-preflighted before this command, and the initial guide frame must be reviewed
-before interpreting any result. Do not run this against the technical seed,
+preflighted before this command. Review the initial-spawn PNG and any later
+guide-open PNG separately before interpreting the result. Do not run this
+against the technical seed,
 install/download a model at runtime, or call a scripted replay a B01 trial.
 
 | Actor request | Fixed behavior and limit | Deliberately absent |
