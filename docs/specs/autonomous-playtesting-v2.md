@@ -5,8 +5,8 @@ Status: the bounded milestones 1-3 first slice is accepted; see the
 Broader illustrative semantic actions below remain unsupported unless explicitly
 listed in [scenario-v2.md](../scenario-v2.md). Milestone 4 now has its bounded
 [GameTest adapter/importer and live conservation proof](../checkpoints/2026-09-27-gametest.md).
-Milestone 5 has a separate [offline visible-input candidate](2026-09-27-survival-visible-input-spike.md)
-but no isolated actor or live Survival acceptance. The full spec is not yet implemented.
+Milestone 5 has a separate [visible-input and offline isolated-actor candidate](2026-09-27-survival-visible-input-spike.md)
+but no fresh-world isolated-policy trial or live Survival acceptance. The full spec is not yet implemented.
 Target: Minecraft 1.21.1 Fabric first, with Aura
 Cascade Reimagined as the first case study. This document
 specifies reusable Mod Lab engineering. The Aura-specific execution plan and

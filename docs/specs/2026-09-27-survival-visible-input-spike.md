@@ -1,7 +1,7 @@
 # Milestone 5a: bounded visible-input Survival spike
 
-Status: public source candidate with bounded developer technical
-evidence, not an isolated actor or B01 Survival acceptance. This is a
+Status: published bounded developer technical evidence plus an offline-tested
+isolated-actor follow-up candidate, not B01 Survival acceptance. This is a
 separate follow-on to public checkpoint `16ba207`. It does not change Aura or
 make B01 guide-led fresh-world Survival complete. The broader five-seed task
 driver gate remains in [autonomous-playtesting-v2.md](autonomous-playtesting-v2.md#survival-agent-research-spike-separate-milestone).
@@ -36,11 +36,17 @@ trusted scripted runner as a policy.
 Before a live B01 attempt, demonstrate negative probes from the actor context:
 reading Mod Lab and Aura source/save files, reading the bridge token from the
 environment, connecting directly to the bridge port, and requesting typed
-inspection or command execution must all fail. The broker's future JSON/tool
-schema must expose only `frame`, `look`, `pulse`, `press`, `click`, and `cancel`; malformed or
-unknown requests must not dispatch input. The parent records these denials and
-owns an outer wall-time/process-loss stop that closes the client if neutral
-release cannot be confirmed. The actor must never receive evaluator results or
+inspection or command execution must all fail. The broker's game-control
+schema exposes only `frame`, `look`, `pulse`, `press`, `click`, and `cancel`.
+An internal `vision` exchange may ask the trusted model to choose from a cached
+PNG and generic action history, but must never query the game or expose typed
+observations. Malformed or
+unknown requests must not dispatch input. The parent records these denials.
+The current launcher handles normal errors, wall-time cancellation and
+neutral-release failure in process, but a hard trusted-launcher crash can
+leave its Minecraft child running. An independently verified parent-owned
+process-loss watchdog or Windows Job Object is required before a live B01
+actor trial. The actor must never receive evaluator results or
 the predeclared guide answer.
 
 The actor sees PNG framebuffer bytes and a generic input acknowledgement,
@@ -48,6 +54,84 @@ not screen classes, slots, block/entity inventories, server ticks, game
 coordinates, registry IDs, recipe tables, source lookup, or typed HUD data.
 Those remain evaluator-only. A server-authoritative probe is still not player
 knowledge. Input acknowledgements never establish gameplay success.
+
+### Offline isolated-actor candidate
+
+`scripts/isolated_survival_actor.py` runs under WSL Ubuntu `bubblewrap` with
+its own network namespace, dropped capabilities, new session and a minimal
+read-only Python/script mount. The
+trusted `survival_actor.py` broker retains the token, PID identity, model
+connection, input lease and evaluator observations. It transmits only original
+PNG frames, one selected fixed action, and generic accepted/denied replies
+over stdio. The child cannot mount the Windows workspace, connect to the
+bridge, inherit the token, or request typed observations/commands; offline
+tests execute those denials from the actual sandbox. The local Ollama model
+is part of the trusted inference service, not an actor file/network tool; the
+child is transport, while that model makes the pixel-only policy decisions. The
+host-side Ollama process is **not** OS-isolated by the child's sandbox; model
+tool denial and PNG-only request construction are application controls. A live
+B01 claim still requires separately approved model execution, independent
+sandbox/process review, and evidence that the policy decision point has no
+privileged source or hidden game-state route. The model receives the PNG and
+bounded generic action history with no tool list or
+privileged telemetry; its JSON output must pass the fixed input validator.
+The first actor-visible guide frame is retained as pixel context for later
+vision calls, with no OCR, fixture answer, source lookup or privileged state.
+
+`scripts/run_survival_actor.py` is an owned-launch first-trial entry point.
+Before Minecraft starts it checks the exact Aura `0.2.1+1.21.1` artifact,
+published movement-pulse bridge hash, a closed/copied `level.dat` with
+`allowCommands=0`, `GameType=0`, and empty player/ender inventory. It binds
+the copied `level.dat` bytes to the closed seed and checks the whole copied
+world against the prepared profile hash before launch, then requires an
+explicitly named, already-installed local vision model. It never pulls a
+model or starts Ollama. After client readiness the evaluator checks a fresh
+server-authoritative empty inventory, runs source/save/token/port and broker
+denial probes, then starts `PolicySession`. The first PNG and action trace
+stay in the evaluator's profile evidence with the first-frame SHA-256,
+timestamped trusted action trace, child-source SHA-256, bubblewrap version and neutral-release
+status; raw actor status remains
+`inconclusive` until independent guide visibility/gameplay review. Any
+failed isolation, model, seed, input, cancellation or neutral-release gate
+fails closed. A cancellation observed before dispatch denies that action;
+an already in-flight authenticated input can complete before neutral release,
+so this is not a mathematically exact wall-clock action cutoff. No hidden setup
+result is sent to the actor.
+
+The NBT checks are a no-cheat/empty-inventory gate, **not proof of a freshly
+generated or unplayed world**. A separate reviewed creation record and clean
+copy chain must establish that provenance before B01. Saving `first-frame.png`
+does not verify that the in-game guide is visible; an independent reviewer
+must inspect that exact frame before accepting a guide-led claim. The current
+Java/OBS resource guard does not account for an external model process or GPU
+memory. A future local-model trial needs an explicit model allocation and
+resource observation in addition to the Minecraft client cap.
+
+Current local model inventory contains only an embedding model, not a vision
+model, and the existing technical Survival seed is cheat-enabled and seeded.
+Therefore no fresh guide-led run has been made from this candidate. The next
+leased gate requires a separately reviewed unseeded no-cheat Survival world
+whose guide is visible in the first frame, an explicitly approved installed
+vision model, normal client/OBS cleanup, and independent review of the actor
+trace. One attempt may fail or be inconclusive; five declared vanilla seeds
+and one Aura guide-led action remain the broader acceptance obligation.
+Native AstraLight can review actor-visible frames and recordings, but its
+normal workspace/tool permissions are not an isolated B01 policy boundary.
+No scoped in-app PNG-to-fixed-action endpoint is currently available to this
+broker. An OpenAI API model would require separately approved billable access;
+the local Ollama adapter is only an optional offline candidate, not an
+authorization to download or run a new model.
+
+At a future explicit client lease, prepare a fresh reviewed runtime profile
+with the existing `python lab.py runtime prepare` command, then invoke
+`python -m scripts.run_survival_actor --manifest <reviewed-manifest> --profile
+<fresh-profile> --scenario <identity-matched-scenario> --model
+<already-installed-vision-model> --aura-source <existing-Aura-Java-source>`.
+The scenario is only the launch identity preflight; the actor does not receive
+its steps. The private model endpoint must be independently approved and
+preflighted before this command, and the initial guide frame must be reviewed
+before interpreting any result. Do not run this against the technical seed,
+install/download a model at runtime, or call a scripted replay a B01 trial.
 
 | Actor request | Fixed behavior and limit | Deliberately absent |
 | --- | --- | --- |
@@ -60,15 +144,17 @@ knowledge. Input acknowledgements never establish gameplay success.
 
 Session caps: 10 wall minutes, 1200 input calls, 600 frames, at least 100 ms
 between non-pulse inputs, and an existing 3800 MiB client working-set guard.
-The broker refuses a pulse that would pass its deadline; the parent's outer
-process guard enforces the hard wall across network waits. The broker never returns the bridge
+The broker refuses a pulse that would pass its deadline; its asynchronous
+deadline signal prevents any new action after ten minutes; an already in-flight
+model or bridge call may finish on its own fixed timeout before neutral teardown,
+so this is not an exact global wall-clock limit. The broker never returns the bridge
 endpoint, token, identity, file path, exception detail, or server result to
 the actor. It calls the selected PID/loopback verifier before each bridge
 request. A failed, timed-out, or unvalidated action terminates the session,
 marks the profile uncertain through the existing action path, and attempts
-neutral release; a failed release is a failed run, never success. The parent
-owns the outer process timeout and normal client shutdown, including broker
-process loss.
+neutral release; a failed release is a failed run, never success. The launcher
+owns its in-process timeout and normal client shutdown. Hard broker-process
+loss is not yet contained and remains a pre-live gate.
 
 The movement candidate removes the second per-pulse HTTP release request for
 `forward`, `back`, `left`, `right`, `jump`, and `sneak`. Its one-shot deadline is
@@ -106,8 +192,8 @@ gate demonstrates the new path.
    No NPC result can establish real-client GUI, rendering or player-only Aura
    semantics. A failure/inconclusive run is still a valid measured result.
 
-The current runner has fixed scenarios, screenshots and some ordinary inputs,
-but no isolated policy actor and incomplete camera/movement controls. It
+The runner has fixed scenarios, screenshots, ordinary inputs and an offline
+sandboxed transport candidate, but no approved live isolated policy actor. It
 cannot claim autonomous Survival. No hidden setup assertion may be replaced
 by a console command's exit alone: the evaluator must check the loaded world,
 Survival/cheat settings, empty-start inventory and intended preconditions
