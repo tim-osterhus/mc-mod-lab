@@ -15,6 +15,7 @@ import scenario_v2
 
 
 MAX_WALL_SECONDS = 600
+MAX_TRIAL_WALL_SECONDS = 1800
 MAX_INPUTS = 1200
 MAX_FRAMES = 600
 MAX_PNG_BYTES = 8 * 1024 * 1024
@@ -98,13 +99,16 @@ def _validate_input(request, frame_size):
 class PolicySession:
     """Trusted broker half; never pass this object or its identity to the actor."""
 
-    def __init__(self, identity, expected_frame):
+    def __init__(self, identity, expected_frame, *, wall_seconds=MAX_WALL_SECONDS):
+        if not _integer(wall_seconds, 1, MAX_TRIAL_WALL_SECONDS):
+            raise PolicyError("reviewed session duration is required")
         if (not isinstance(expected_frame, tuple) or len(expected_frame) != 2
                 or not _integer(expected_frame[0], 640, 1920)
                 or not _integer(expected_frame[1], 360, 1080)):
             raise PolicyError("reviewed frame size is required")
         self._identity = identity
         self._expected_frame = expected_frame
+        self._wall_seconds = wall_seconds
         self._lease = None
         self._deadline = None
         self._closed = False
@@ -136,7 +140,7 @@ class PolicySession:
             if not self.close():
                 raise PolicyError("Survival session unavailable; client must close") from None
             raise PolicyError("Survival session unavailable") from None
-        self._deadline = time.monotonic() + MAX_WALL_SECONDS
+        self._deadline = time.monotonic() + self._wall_seconds
 
     def _ready(self):
         if self._closed or self._lease is None or self._deadline is None:

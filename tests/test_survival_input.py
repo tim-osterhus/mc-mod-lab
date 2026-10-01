@@ -46,6 +46,38 @@ class SurvivalInputTests(unittest.TestCase):
         self.assertTrue(session.close())
         self.lease.release.assert_called_once()
 
+    def test_default_duration_remains_ten_minutes(self):
+        session = self.session()
+        self.assertEqual(session._deadline, self.now + 600)
+        session.close()
+
+    def test_trusted_duration_is_fixed_and_expires_at_exact_bound(self):
+        session = subject.PolicySession(self.identity, (640, 360), wall_seconds=1800)
+        session.start()
+        self.now += 600
+        session._ready()
+        self.now += 1200
+        with self.assertRaisesRegex(subject.PolicyError, "deadline reached"):
+            session._ready()
+        self.assertEqual(session.cleanup_status, "pass")
+        self.lease.release.assert_called_once()
+
+    def test_invalid_duration_rejected_before_acquiring_control(self):
+        for value in (True, False, 0, -1, 1801, 600.0, "600", None):
+            with self.subTest(value=value), self.assertRaises(subject.PolicyError):
+                subject.PolicySession(self.identity, (640, 360), wall_seconds=value)
+        self.lease.enter.assert_not_called()
+
+    def test_actor_cannot_change_duration(self):
+        session = self.session()
+        deadline = session._deadline
+        with patch.object(session, "_action") as action:
+            with self.assertRaises(subject.PolicyError):
+                session.input({"type": "look", "yaw_delta": 1, "pitch_delta": 0, "wall_seconds": 1800})
+            action.assert_not_called()
+        self.assertEqual(session._deadline, deadline)
+        session.close()
+
     def test_visible_requests_are_fixed_and_strict(self):
         session = self.session()
         with patch.object(session, "_action") as action, patch.object(subject.lab, "command", return_value={}):

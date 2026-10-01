@@ -1,5 +1,14 @@
 # Milestone 5a: bounded visible-input Survival spike
 
+Trusted duration follow-up: `PolicySession(..., wall_seconds=...)` accepts an
+explicit integer1..1800 from the evaluator, default600. The actor cannot set
+or renew this duration through its input schema. Input/frame budgets, cadence,
+freshness and neutral-release rules are unchanged. Existing launchers and
+historical trials still use their original ten-minute contracts; this option
+alone does not extend their recorder, watchdog, profile or parent lease. A
+longer natural acquisition trial requires those budgets to be aligned and
+declared before launch. This is input capability, not B01 gameplay acceptance.
+
 Status: published bounded developer technical evidence plus an offline-tested
 isolated-actor follow-up candidate, not B01 Survival acceptance. This is a
 separate follow-on to public checkpoint `16ba207`. It does not change Aura or
