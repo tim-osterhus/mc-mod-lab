@@ -14,9 +14,9 @@ def tag(kind, name, payload):
     return bytes([kind]) + struct.pack(">H", len(encoded)) + encoded + payload
 
 
-def seed_bytes(cheats=0, gamemode=0, inventory=0, ender=0):
-    player = (tag(9, "Inventory", bytes([10]) + struct.pack(">i", inventory) + b"\x00" * inventory) +
-              tag(9, "EnderItems", bytes([10]) + struct.pack(">i", ender) + b"\x00" * ender) + b"\x00")
+def seed_bytes(cheats=0, gamemode=0, inventory=0, ender=0, inventory_type=10, ender_type=10):
+    player = (tag(9, "Inventory", bytes([inventory_type]) + struct.pack(">i", inventory) + b"\x00" * inventory) +
+              tag(9, "EnderItems", bytes([ender_type]) + struct.pack(">i", ender) + b"\x00" * ender) + b"\x00")
     data = (tag(1, "allowCommands", struct.pack(">b", cheats)) +
             tag(3, "GameType", struct.pack(">i", gamemode)) +
             tag(10, "Player", player) + b"\x00")
@@ -38,6 +38,22 @@ class SeedTests(unittest.TestCase):
 
     def test_cheats_creative_and_seeded_inventory_refused(self):
         for values in ({"cheats": 1}, {"gamemode": 1}, {"inventory": 1}, {"ender": 1}):
+            with self.subTest(values=values):
+                self.write(**values)
+                with self.assertRaises(survival_seed.SeedError):
+                    survival_seed.inspect_seed(self.world)
+
+    def test_vanilla_empty_end_tag_lists(self):
+        for values in ({"inventory_type": 0}, {"ender_type": 0},
+                       {"inventory_type": 0, "ender_type": 0}):
+            with self.subTest(values=values):
+                self.write(**values)
+                self.assertEqual(survival_seed.inspect_seed(self.world)["status"], "pass")
+
+    def test_end_tag_nonempty_and_wrong_inventory_types_refused(self):
+        for values in ({"inventory_type": 0, "inventory": 1},
+                       {"ender_type": 0, "ender": 1},
+                       {"inventory_type": 1}, {"ender_type": 1}):
             with self.subTest(values=values):
                 self.write(**values)
                 with self.assertRaises(survival_seed.SeedError):

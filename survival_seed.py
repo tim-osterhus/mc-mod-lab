@@ -57,7 +57,7 @@ class Reader:
             if length < 0 or length > MAX_NBT_BYTES or (element == 0 and length):
                 raise SeedError("level.dat contains an invalid NBT list")
             if path in FIELDS:
-                if path in self.fields or element != 10:
+                if path in self.fields or (element != 10 and not (element == 0 and length == 0)):
                     raise SeedError("level.dat contains an invalid inventory list")
                 self.fields[path] = (tag, length)
             for _ in range(length):
