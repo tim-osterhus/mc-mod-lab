@@ -42,6 +42,17 @@ The alpha runner requires a bridge response containing the actual canonical worl
 
 The v0.3.0 `/api/status` `version` field is sourced from `mcp.mod.version`, not a reliable Minecraft game-version field. The client PID, port, socket bind, world name, and canonical world save path are checked live. On Windows the CLI additionally checks the selected Java process arguments for one exact `--gameDir` value, including one local `@argfile` directly referenced by that PID. Missing, changed-after-launch, unreadable, or ambiguous argfiles are unsupported. It also requires the marked fixture under that directory's `saves` and a fresh launch log containing `Loading Minecraft 1.21.1 with Fabric Loader`. A verified local dev bridge revision exposed the actual integrated-server save path; the stock world getter does not. A successful capture is **not** visual or parity approval.
 
+Windows listener ownership is read afresh with the standard-library `ctypes`
+binding to [GetExtendedTcpTable](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable),
+not a PowerShell subprocess. Both IPv4 and IPv6 owner-PID listener tables must
+be readable; only one exact IPv4 `127.0.0.1` listener at the selected port and
+PID is accepted. Each table is capped at 1 MiB and four API calls (sizing plus
+three reads). API errors, invalid sizes/counts, truncated rows, unexpected
+states, or exhausted resizing fail closed without caching or fallback.
+PowerShell remains the independent parent binding readback and launch-identity
+tool. Capture-start timestamps and all actor freshness/security gates are
+unchanged; this does not establish a historical refusal cause or gameplay pass.
+
 ## Commands
 
 Python 3.10+ with the standard library is enough:

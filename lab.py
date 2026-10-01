@@ -15,6 +15,7 @@ import platform
 import re
 import shlex
 import shutil
+import socket
 import struct
 import subprocess
 import sys
@@ -232,25 +233,80 @@ def check_derivative(identity):
     return actual
 
 
+class _TcpRowOwnerPid(ctypes.Structure):
+    _fields_ = [("dwState", ctypes.c_uint32), ("dwLocalAddr", ctypes.c_uint32),
+                ("dwLocalPort", ctypes.c_uint32), ("dwRemoteAddr", ctypes.c_uint32),
+                ("dwRemotePort", ctypes.c_uint32), ("dwOwningPid", ctypes.c_uint32)]
+
+
+class _Tcp6RowOwnerPid(ctypes.Structure):
+    _fields_ = [("ucLocalAddr", ctypes.c_ubyte * 16), ("dwLocalScopeId", ctypes.c_uint32),
+                ("dwLocalPort", ctypes.c_uint32), ("ucRemoteAddr", ctypes.c_ubyte * 16),
+                ("dwRemoteScopeId", ctypes.c_uint32), ("dwRemotePort", ctypes.c_uint32),
+                ("dwState", ctypes.c_uint32), ("dwOwningPid", ctypes.c_uint32)]
+
+
+MAX_TCP_TABLE_BYTES = 1024 * 1024
+
+
+def _tcp_listener_rows(get_table, family):
+    """Read one bounded Windows OWNER_PID_LISTENER table, never a partial result."""
+    if family not in (2, 23):  # Windows AF_INET / AF_INET6.
+        raise LabError("unsupported socket address family")
+    row_type = _TcpRowOwnerPid if family == 2 else _Tcp6RowOwnerPid
+
+    class Table(ctypes.Structure):
+        _fields_ = [("dwNumEntries", ctypes.c_uint32), ("table", row_type * 1)]
+
+    offset, stride = Table.table.offset, ctypes.sizeof(row_type)
+    size = ctypes.c_uint32()
+    result = get_table(None, ctypes.byref(size), False, family, 3, 0)
+    if result != 122:  # ERROR_INSUFFICIENT_BUFFER; TableClass 3 includes owner PIDs.
+        raise LabError(f"socket table sizing failed (family {family}, code {result})")
+    if not offset <= size.value <= MAX_TCP_TABLE_BYTES:
+        raise LabError("socket table size is invalid or exceeds limit")
+    for _ in range(3):
+        capacity = size.value
+        buffer = ctypes.create_string_buffer(capacity)
+        result = get_table(buffer, ctypes.byref(size), False, family, 3, 0)
+        if result == 122:
+            if not capacity < size.value <= MAX_TCP_TABLE_BYTES:
+                raise LabError("socket table resize is invalid or exceeds limit")
+            continue
+        if result != 0:
+            raise LabError(f"socket table read failed (family {family}, code {result})")
+        if not offset <= size.value <= capacity:
+            raise LabError("socket table returned an invalid size")
+        count = ctypes.c_uint32.from_buffer_copy(buffer).value
+        if count > (size.value - offset) // stride:
+            raise LabError("socket table rows are truncated")
+        rows = [row_type.from_buffer_copy(buffer, offset + index * stride) for index in range(count)]
+        if any(row.dwState != 2 for row in rows):  # MIB_TCP_STATE_LISTEN only.
+            raise LabError("socket listener table returned an unexpected state")
+        return rows
+    raise LabError("socket table kept growing beyond the retry limit")
+
+
 def listening_socket(pid, port):
     if platform.system() != "Windows":
         raise LabError("live socket ownership check is implemented for Windows only")
-    shell = shutil.which("powershell") or shutil.which("pwsh")
-    if not shell:
-        raise LabError("PowerShell is required to inspect the bridge listener")
-    command = (f"@(Get-NetTCPConnection -State Listen -LocalPort {port} -ErrorAction SilentlyContinue | "
-               "Select-Object LocalAddress,LocalPort,OwningProcess) | ConvertTo-Json -Compress")
-    result = subprocess.run([shell, "-NoProfile", "-Command", command], capture_output=True,
-                            text=True, timeout=10, check=False)
-    if result.returncode != 0:
-        raise LabError("could not inspect listening socket")
+    if type(pid) is not int or not 1 <= pid <= 0xffffffff or type(port) is not int or not 1 <= port <= 65535:
+        raise LabError("socket inspection requires a valid PID and port")
     try:
-        rows = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError as exc:
-        raise LabError("socket inspection returned invalid data") from exc
-    if isinstance(rows, dict):
-        rows = [rows]
-    if len(rows) != 1 or rows[0].get("LocalAddress") != "127.0.0.1" or rows[0].get("OwningProcess") != pid:
+        iphlpapi = ctypes.WinDLL("iphlpapi", use_last_error=True)
+        get_table = iphlpapi.GetExtendedTcpTable
+        get_table.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_int,
+                              ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        get_table.restype = ctypes.c_uint32
+        listeners = []
+        for family in (2, 23):
+            for row in _tcp_listener_rows(get_table, family):
+                if socket.ntohs(row.dwLocalPort & 0xffff) == port:
+                    address = socket.inet_ntoa(struct.pack("=I", row.dwLocalAddr)) if family == 2 else None
+                    listeners.append((address, row.dwOwningPid))
+    except (OSError, AttributeError, MemoryError) as exc:
+        raise LabError("could not inspect listening socket") from exc
+    if listeners != [("127.0.0.1", pid)]:
         raise LabError("bridge must have one 127.0.0.1 listener owned by the selected PID")
     return True
 

@@ -252,12 +252,10 @@ class LabTests(unittest.TestCase):
             lab._launch_game_dir(command_line, datetime.now(timezone.utc))
 
     def test_bad_binding_rejected(self):
-        class Result:
-            returncode = 0
-            stdout = json.dumps({"LocalAddress": "0.0.0.0", "LocalPort": 9876, "OwningProcess": 123})
+        row = lab._TcpRowOwnerPid(dwState=2, dwLocalPort=lab.socket.htons(9876), dwOwningPid=123)
         with patch.object(lab.platform, "system", return_value="Windows"), \
-             patch.object(lab.shutil, "which", return_value="powershell"), \
-             patch.object(lab.subprocess, "run", return_value=Result()):
+             patch.object(lab.ctypes, "WinDLL", create=True), \
+             patch.object(lab, "_tcp_listener_rows", side_effect=[[row], []]):
             with self.assertRaisesRegex(lab.LabError, "127.0.0.1"):
                 lab.listening_socket(123, 9876)
 
